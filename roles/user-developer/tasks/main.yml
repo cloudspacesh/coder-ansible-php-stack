@@ -45,4 +45,5 @@
     dest: "{{ developer_user_info.home }}"
     owner: "{{ developer_username }}"
     recurse: true
+    follow: false
   when: developer_user_info.home is regex('^/home/.*')
