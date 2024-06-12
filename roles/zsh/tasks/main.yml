@@ -1,9 +1,9 @@
 ---
 - name: Ensure ZSH,GIT packages
-  apt: 
-    pkg: 
+  package: 
+    name: 
       - zsh
-      - git
+      - git-core
     state: present
   register: installation
   become: true

@@ -7,6 +7,11 @@ exec 2> >(sed 's/\x1B\[[0-9;]\{1,\}[A-Za-z]//g' >&2)
 exec > >(sed 's/\x1B\[[0-9;]\{1,\}[A-Za-z]//g')
 
 pushd `dirname $0` > /dev/null;DIR=`pwd -P`;popd > /dev/null
+
+. /etc/os-release
+
+DISTRO=${ID_LIKE:-$ID}
+
 [[ -f "${DIR}/.env" ]] && source "${DIR}/.env"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -14,10 +19,21 @@ export ANSIBLE_NOCOLOR=True
 export ANSIBLE_CONFIG=${DIR}/ansible.cfg
 export ANSIBLE_STDOUT_CALLBACK=yaml
 
-apt --fix-broken install
-which envsubst > /dev/null || apt update -qqqy && apt install -qqqy gettext
-which pip3 > /dev/null || apt update -qqqy && apt install -qqqy python3-pip
-which python3 > /dev/null || apt update -qqqy && apt install -qqqy python3
+if [[ "debian" == $DISTRO ]]; then
+  apt --fix-broken install
+  which envsubst > /dev/null || apt update -qy && apt install -qy gettext
+  which pip3 > /dev/null || apt update -qy && apt install -qy python3-pip
+  which python3 > /dev/null || apt update -qy && apt install -qy python3
+  which ansible-playbook > /dev/null || apt update -qy && apt install -qy ansible
+elif [[ "fedora" == $DISTRO ]]; then
+  which envsubst > /dev/null || dnf install -qy gettext
+  which pip3 > /dev/null || dnf install -qy python3-pip
+  which python3 > /dev/null || dnf install -qy python3
+  which ansible-playbook || dnf install -qy ansible
+else
+  echo "Unsupported distro: $DISTRO"
+  exit 1
+fi
 
 ANSIBLE_HOST=${ANSIBLE_HOST:-localhost}
 if [[ ! -z $ANSIBLE_HOST ]]; then
@@ -62,4 +78,4 @@ CONFIG
 fi
 
 #pip3 install -r ${DIR}/requirements.txt
-ANSIBLE_HOST_KEY_CHECKING=False python3 ${DIR}/ansible-playbook -i ${DIR}/environments/${ANSIBLE_HOST} ${DIR}/playbook.yml "$@"
+ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ${DIR}/environments/${ANSIBLE_HOST} ${DIR}/playbook.yml "$@"

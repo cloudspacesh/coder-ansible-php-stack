@@ -11,11 +11,19 @@
 - name: Update apt cache
   apt: 
     update_cache: yes
+  when: "ansible_system == 'Linux' and distro_id == 'debian'"
 
-- name: Ensure base packages
-  apt:
-    pkg: "{{ base_packages }}"
+- name: Ensure debian packages
+  package:
+    name: "{{ debian_packages }}"
     state: present
+  when: "ansible_system == 'Linux' and distro_id == 'debian'"
+
+- name: Ensure fedora packages
+  package:
+    name: "{{ fedora_packages }}"
+    state: present
+  when: "ansible_system == 'Linux' and distro_id == 'fedora'"
 
 - name: Ensure pip packages
   pip:

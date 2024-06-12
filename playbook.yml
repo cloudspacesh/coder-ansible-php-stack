@@ -28,8 +28,20 @@
       setup:
       tags: 
         - always
+
+    - name: Check Distro
+      shell: "cat /etc/os-release | grep '^\\(ID=\\|ID_LIKE=\\)' | tail -1 | awk -F= '{ print $2 }'"
+      register: response
+      tags:
+        - always
+
+    - name: Register distro_id fact
+      set_fact:
+        distro_id: "{{ response.stdout }}"
+      tags:
+        - always
     
-    - name: Ensure homebrew_prefix
+    - name: Register homebrew_prefix fact
       set_fact:
         homebrew_prefix: "/home/linuxbrew/.linuxbrew"
       tags: 
