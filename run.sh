@@ -8,32 +8,41 @@ exec > >(sed 's/\x1B\[[0-9;]\{1,\}[A-Za-z]//g')
 
 pushd `dirname $0` > /dev/null;DIR=`pwd -P`;popd > /dev/null
 
-. /etc/os-release
-
-DISTRO=${ID_LIKE:-$ID}
-
 [[ -f "${DIR}/.env" ]] && source "${DIR}/.env"
 
 export DEBIAN_FRONTEND=noninteractive
 export ANSIBLE_NOCOLOR=True
 export ANSIBLE_CONFIG=${DIR}/ansible.cfg
 export ANSIBLE_STDOUT_CALLBACK=yaml
+export ANSIBLE_NOCOWS=1
 
-if [[ "debian" == $DISTRO ]]; then
-  apt --fix-broken install
-  which envsubst > /dev/null || apt update -qy && apt install -qy gettext
-  which pip3 > /dev/null || apt update -qy && apt install -qy python3-pip
-  which python3 > /dev/null || apt update -qy && apt install -qy python3
-  which ansible-playbook > /dev/null || apt update -qy && apt install -qy ansible
-elif [[ "fedora" == $DISTRO ]]; then
-  which envsubst > /dev/null || dnf install -qy gettext
-  which pip3 > /dev/null || dnf install -qy python3-pip
-  which python3 > /dev/null || dnf install -qy python3
-  which ansible-playbook || dnf install -qy ansible
+hash -r
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  which envsubst > /dev/null || brew install gettext
 else
-  echo "Unsupported distro: $DISTRO"
-  exit 1
+  . /etc/os-release
+  DISTRO=${ID_LIKE:-$ID}
+  if [[ "debian" == $DISTRO ]]; then
+    apt --fix-broken install
+    which envsubst > /dev/null || apt update -qy && apt install -qy gettext
+    which pip3 > /dev/null || apt update -qy && apt install -qy python3-pip
+    which python3 > /dev/null || apt update -qy && apt install -qy python3
+    which ansible-playbook > /dev/null || apt update -qy && apt install -qy ansible
+  elif [[ "fedora" == $DISTRO ]]; then
+    which envsubst > /dev/null || dnf install -qy gettext
+    which pip3 > /dev/null || dnf install -qy python3-pip
+    which python3 > /dev/null || dnf install -qy python3
+    which ansible-playbook || dnf install -qy ansible
+  else
+    echo "Unsupported distro: $DISTRO"
+    exit 1
+  fi
 fi
+
+PYTHON_BIN=${PYTHON_BIN:-$(which brew > /dev/null 2>&1 && brew --prefix python3 > /dev/null 2>&1 && echo $(brew --prefix python3)/bin/python3 || echo $(which python3 > /dev/null && which python3 || echo "/usr/bin/python3"))}
+ANSIBLE_PLAYBOOK_BIN=${ANSIBLE_PLAYBOOK_BIN:-$(which ansible-playbook 2>/dev/null || echo "${DIR}/ansible-playbook")}
+ANSIBLE_PLAYBOOK_CMD=$(which ansible-playbook 2>/dev/null || echo "${PYTHON_BIN} ${DIR}/ansible-playbook")
 
 ANSIBLE_HOST=${ANSIBLE_HOST:-localhost}
 if [[ ! -z $ANSIBLE_HOST ]]; then
@@ -51,7 +60,7 @@ if [[ ! -z $ANSIBLE_HOST ]]; then
         export USER_DEVELOPER_UID=$(id -u ${USER_DEVELOPER_USERNAME:-$USER})
         export USER_DEVELOPER_USERNAME=$(id -nu $USER_DEVELOPER_UID)
 
-        if [[ $USER_DEVELOPER_UID -lt 1000 ]]; then
+        if [[ $USER_DEVELOPER_UID -lt 1000 ]] && [[ "$OSTYPE" != "darwin"* ]]; then
             if id -nu 1000 > /dev/null; then
                 export USER_DEVELOPER_UID=1000
                 export USER_DEVELOPER_USERNAME=$(id -nu 1000)
@@ -78,4 +87,4 @@ CONFIG
 fi
 
 #pip3 install -r ${DIR}/requirements.txt
-ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i ${DIR}/environments/${ANSIBLE_HOST} ${DIR}/playbook.yml "$@"
+ANSIBLE_HOST_KEY_CHECKING=False ${ANSIBLE_PLAYBOOK_CMD} -i ${DIR}/environments/${ANSIBLE_HOST} ${DIR}/playbook.yml "$@"

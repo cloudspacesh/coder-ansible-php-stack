@@ -1,0 +1,2 @@
+[coder_workspace_vm]
+localhost ansible_connection=local ansible_user=user1276

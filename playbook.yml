@@ -15,14 +15,14 @@
       tags: 
         - always
 
-    - name: 'Installing facts.d'
-      copy:
-        src: facts.d
-        dest:  /etc/ansible/
-        owner: root
-        mode: u=rwx,g=rx,o=rx
-      tags: 
-        - always
+        #- name: 'Installing facts.d'
+        #copy:
+        #src: facts.d
+        #dest:  /etc/ansible/
+        #owner: root
+        #mode: u=rwx,g=rx,o=rx
+        #tags:
+        #- always
 
     - name: Gathering facts
       setup:
@@ -32,23 +32,40 @@
     - name: Check Distro
       shell: "cat /etc/os-release | grep '^\\(ID=\\|ID_LIKE=\\)' | tail -1 | awk -F= '{ print $2 }'"
       register: response
+      when: ansible_system == 'Linux'
       tags:
         - always
 
     - name: Register distro_id fact
       set_fact:
         distro_id: "{{ response.stdout }}"
+      when: ansible_system == 'Linux'
       tags:
         - always
-    
-    - name: Register homebrew_prefix fact
+
+    - name: Ensure homebrew_prefix
       set_fact:
         homebrew_prefix: "/home/linuxbrew/.linuxbrew"
-      tags: 
+      when: "ansible_system == 'Linux'"
+      tags:
+        - always
+
+    - name: Ensure homebrew_prefix
+      ansible.builtin.set_fact:
+        homebrew_prefix: "/usr/local"
+      when: "ansible_system == 'Darwin' and ansible_architecture == 'x86_64'"
+      tags:
+        - always
+
+    - name: Ensure homebrew_prefix
+      ansible.builtin.set_fact:
+        homebrew_prefix: "/opt/prefix"
+      when: "ansible_system == 'Darwin' and ansible_architecture == 'arm64'"
+      tags:
         - always
 
     - name: "Stopping digitalspace-supervisor"
-      shell: '[ -e /home/linuxbrew/.linuxbrew/bin/digitalspace-supervisor-stop ] && /home/linuxbrew/.linuxbrew/bin/digitalspace-supervisor-stop || /bin/true'
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop || /bin/true || /usr/bin/true'
       become: true
       become_user: "root"
       tags: 
@@ -60,11 +77,13 @@
     #     - debug_info
 
     - role: roles/system-base
-      tags: 
+      when: "ansible_system == 'Linux'"
+      tags:
         - base-system
 
     - role: roles/user-developer
-      tags: 
+      when: "ansible_system == 'Linux'"
+      tags:
         - base-system
 
     - role: roles/zsh
@@ -72,7 +91,7 @@
         - zsh
 
     - role: roles/system-homebrew
-      when: developer_username is defined
+      when: developer_username is defined and ansible_system == 'Linux'
       tags:
         - base-system
 
@@ -200,7 +219,7 @@
       when: developer_username is defined
 
   post_tasks:
-    - shell: "echo $({{ homebrew_prefix }}/bin/brew list | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" || /bin/true)"
+    - shell: "echo $({{ homebrew_prefix }}/bin/brew list | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" || /bin/true || /usr/bin/true)"
       register: brew_list
       become: yes
       become_user: "{{ developer_username }}"
@@ -215,17 +234,26 @@
       tags:
         - always
 
+    - name: "Stat digitalspace-supervisor.d dir"
+      stat:
+        path: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
+      register: stat_etc_digitalspace_supervisor_d
+      become: true
+      tags:
+        - always
+
     - name: "Remove another php versions from supervisor"
       shell: 
         cmd: "ls | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" | xargs --no-run-if-empty -I{} rm {}"
         chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
       become: yes
       become_user: "{{ developer_username }}"
+      when: stat_etc_digitalspace_supervisor_d.stat.exists
       tags:
         - always
 
     - name: "Starting digitalspace-supervisor"
-      shell: '[ -e /home/linuxbrew/.linuxbrew/bin/digitalspace-supervisor-start ] && /home/linuxbrew/.linuxbrew/bin/digitalspace-supervisor-start'
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/.linuxbrew/bin/digitalspace-supervisor-start || /bin/true || /usr/bin/true'
       become: true
       become_user: "root"
       tags:
@@ -235,6 +263,7 @@
       shell: 'chsh -s $(which zsh)'
       become: true
       become_user: "root"
+      when: "ansible_system == 'Linux'"
       tags:
         - zsh
 

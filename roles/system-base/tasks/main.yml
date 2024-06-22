@@ -29,13 +29,15 @@
   pip:
     name: "{{ pip_packages }}"
     state: present
+  when: "ansible_system == 'Linux'"
 
 - stat:
     path: "/etc/ssh/sshd_config"
   register: etc_ssh_sshd_config
+  when: "ansible_system == 'Linux'"
 
 - lineinfile:
     dest: /etc/ssh/sshd_config
     state: present
     line: 'AcceptEnv COMPOSER_AUTH'
-  when: etc_ssh_sshd_config.stat.exists
+  when: "ansible_system == 'Linux' and etc_ssh_sshd_config.stat.exists"
