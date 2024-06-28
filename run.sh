@@ -20,6 +20,7 @@ hash -r
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   which envsubst > /dev/null || brew install gettext
+  which python3 > /dev/null || brew install python3
 else
   . /etc/os-release
   DISTRO=${ID_LIKE:-$ID}
@@ -40,7 +41,7 @@ else
   fi
 fi
 
-PYTHON_BIN=${PYTHON_BIN:-$(which brew > /dev/null 2>&1 && brew --prefix python3 > /dev/null 2>&1 && echo $(brew --prefix python3)/bin/python3 || echo $(which python3 > /dev/null && which python3 || echo "/usr/bin/python3"))}
+PYTHON_BIN=${PYTHON_BIN:-$(which brew > /dev/null 2>&1 && brew list 2> /dev/null | grep python3 > /dev/null 2>&1 && brew --prefix python3 > /dev/null 2>&1 && echo $(brew --prefix python3)/bin/python3 || echo $(which python3 > /dev/null && which python3 || echo "/usr/bin/python3"))}
 ANSIBLE_PLAYBOOK_BIN=${ANSIBLE_PLAYBOOK_BIN:-$(which ansible-playbook 2>/dev/null || echo "${DIR}/ansible-playbook")}
 ANSIBLE_PLAYBOOK_CMD=$(which ansible-playbook 2>/dev/null || echo "${PYTHON_BIN} ${DIR}/ansible-playbook")
 
