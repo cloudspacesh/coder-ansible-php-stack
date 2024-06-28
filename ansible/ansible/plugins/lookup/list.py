@@ -7,7 +7,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = """
-    lookup: list
+    name: list
     author: Ansible Core Team
     version_added: "2.0"
     short_description: simply returns what it is given.
@@ -17,7 +17,7 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: unlike with_items you will get 3 items from this loop, the 2nd one being a list
-  debug: var=item
+  ansible.builtin.debug: var=item
   with_list:
     - 1
     - [2,3]
@@ -31,7 +31,8 @@ RETURN = """
     elements: raw
 """
 
-from ansible.module_utils.common._collections_compat import Sequence
+from collections.abc import Sequence
+
 from ansible.plugins.lookup import LookupBase
 from ansible.errors import AnsibleError
 

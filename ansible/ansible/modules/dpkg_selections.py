@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
 # Copyright: Ansible Project
@@ -20,43 +19,67 @@ author:
 options:
     name:
         description:
-            - Name of the package
+            - Name of the package.
         required: true
+        type: str
     selection:
         description:
             - The selection state to set the package to.
         choices: [ 'install', 'hold', 'deinstall', 'purge' ]
         required: true
+        type: str
+extends_documentation_fragment:
+- action_common_attributes
+attributes:
+    check_mode:
+        support: full
+    diff_mode:
+        support: full
+    platform:
+        support: full
+        platforms: debian
 notes:
-    - This module won't cause any packages to be installed/removed/purged, use the C(apt) module for that.
+    - This module will not cause any packages to be installed/removed/purged, use the M(ansible.builtin.apt) module for that.
 '''
 EXAMPLES = '''
 - name: Prevent python from being upgraded
-  dpkg_selections:
+  ansible.builtin.dpkg_selections:
     name: python
     selection: hold
+
+- name: Allow python to be upgraded
+  ansible.builtin.dpkg_selections:
+    name: python
+    selection: install
 '''
 
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.common.locale import get_best_parsable_locale
 
 
 def main():
     module = AnsibleModule(
         argument_spec=dict(
             name=dict(required=True),
-            selection=dict(choices=['install', 'hold', 'deinstall', 'purge'])
+            selection=dict(choices=['install', 'hold', 'deinstall', 'purge'], required=True)
         ),
         supports_check_mode=True,
     )
 
     dpkg = module.get_bin_path('dpkg', True)
 
+    locale = get_best_parsable_locale(module)
+    DPKG_ENV = dict(LANG=locale, LC_ALL=locale, LC_MESSAGES=locale, LC_CTYPE=locale)
+    module.run_command_environ_update = DPKG_ENV
+
     name = module.params['name']
     selection = module.params['selection']
 
     # Get current settings.
     rc, out, err = module.run_command([dpkg, '--get-selections', name], check_rc=True)
-    if not out:
+    if 'no packages found matching' in err:
+        module.fail_json(msg="Failed to find package '%s' to perform selection '%s'." % (name, selection))
+    elif not out:
         current = 'not present'
     else:
         current = out.split()[1]

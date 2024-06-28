@@ -5,116 +5,133 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = r'''
-    inventory: toml
+    name: toml
     version_added: "2.8"
     short_description: Uses a specific TOML file as an inventory source.
     description:
         - TOML based inventory format
         - File MUST have a valid '.toml' file extension
     notes:
-        - Requires the 'toml' python library
+        - >
+          Requires one of the following python libraries: 'toml', 'tomli', or 'tomllib'
 '''
 
-EXAMPLES = r'''
-# Following are examples of 3 different inventories in TOML format
-example1: |
-    [all.vars]
-    has_java = false
+EXAMPLES = r'''# fmt: toml
+# Example 1
+[all.vars]
+has_java = false
 
-    [web]
-    children = [
-        "apache",
-        "nginx"
-    ]
-    vars = { http_port = 8080, myvar = 23 }
+[web]
+children = [
+    "apache",
+    "nginx"
+]
+vars = { http_port = 8080, myvar = 23 }
 
-    [web.hosts]
-    host1 = {}
-    host2 = { ansible_port = 222 }
+[web.hosts]
+host1 = {}
+host2 = { ansible_port = 222 }
 
-    [apache.hosts]
-    tomcat1 = {}
-    tomcat2 = { myvar = 34 }
-    tomcat3 = { mysecret = "03#pa33w0rd" }
+[apache.hosts]
+tomcat1 = {}
+tomcat2 = { myvar = 34 }
+tomcat3 = { mysecret = "03#pa33w0rd" }
 
-    [nginx.hosts]
-    jenkins1 = {}
+[nginx.hosts]
+jenkins1 = {}
 
-    [nginx.vars]
-    has_java = true
+[nginx.vars]
+has_java = true
 
-example2: |
-    [all.vars]
-    has_java = false
+# Example 2
+[all.vars]
+has_java = false
 
-    [web]
-    children = [
-        "apache",
-        "nginx"
-    ]
+[web]
+children = [
+    "apache",
+    "nginx"
+]
 
-    [web.vars]
-    http_port = 8080
-    myvar = 23
+[web.vars]
+http_port = 8080
+myvar = 23
 
-    [web.hosts.host1]
-    [web.hosts.host2]
-    ansible_port = 222
+[web.hosts.host1]
+[web.hosts.host2]
+ansible_port = 222
 
-    [apache.hosts.tomcat1]
+[apache.hosts.tomcat1]
 
-    [apache.hosts.tomcat2]
-    myvar = 34
+[apache.hosts.tomcat2]
+myvar = 34
 
-    [apache.hosts.tomcat3]
-    mysecret = "03#pa33w0rd"
+[apache.hosts.tomcat3]
+mysecret = "03#pa33w0rd"
 
-    [nginx.hosts.jenkins1]
+[nginx.hosts.jenkins1]
 
-    [nginx.vars]
-    has_java = true
+[nginx.vars]
+has_java = true
 
-example3: |
-    [ungrouped.hosts]
-    host1 = {}
-    host2 = { ansible_host = "127.0.0.1", ansible_port = 44 }
-    host3 = { ansible_host = "127.0.0.1", ansible_port = 45 }
+# Example 3
+[ungrouped.hosts]
+host1 = {}
+host2 = { ansible_host = "127.0.0.1", ansible_port = 44 }
+host3 = { ansible_host = "127.0.0.1", ansible_port = 45 }
 
-    [g1.hosts]
-    host4 = {}
+[g1.hosts]
+host4 = {}
 
-    [g2.hosts]
-    host4 = {}
+[g2.hosts]
+host4 = {}
 '''
 
 import os
+import typing as t
 
+from collections.abc import MutableMapping, MutableSequence
 from functools import partial
 
-from ansible.errors import AnsibleFileNotFound, AnsibleParserError
-from ansible.module_utils._text import to_bytes, to_native, to_text
-from ansible.module_utils.common._collections_compat import MutableMapping, MutableSequence
+from ansible.errors import AnsibleFileNotFound, AnsibleParserError, AnsibleRuntimeError
+from ansible.module_utils.common.text.converters import to_bytes, to_native, to_text
 from ansible.module_utils.six import string_types, text_type
 from ansible.parsing.yaml.objects import AnsibleSequence, AnsibleUnicode
 from ansible.plugins.inventory import BaseFileInventoryPlugin
 from ansible.utils.display import Display
 from ansible.utils.unsafe_proxy import AnsibleUnsafeBytes, AnsibleUnsafeText
 
+HAS_TOML = False
 try:
     import toml
     HAS_TOML = True
 except ImportError:
-    HAS_TOML = False
+    pass
+
+HAS_TOMLIW = False
+try:
+    import tomli_w  # type: ignore[import]
+    HAS_TOMLIW = True
+except ImportError:
+    pass
+
+HAS_TOMLLIB = False
+try:
+    import tomllib  # type: ignore[import]
+    HAS_TOMLLIB = True
+except ImportError:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+        HAS_TOMLLIB = True
+    except ImportError:
+        pass
 
 display = Display()
 
-WARNING_MSG = (
-    'The TOML inventory format is marked as preview, which means that it is not guaranteed to have a backwards '
-    'compatible interface.'
-)
 
-
+# dumps
 if HAS_TOML and hasattr(toml, 'TomlEncoder'):
+    # toml>=0.10.0
     class AnsibleTomlEncoder(toml.TomlEncoder):
         def __init__(self, *args, **kwargs):
             super(AnsibleTomlEncoder, self).__init__(*args, **kwargs)
@@ -125,22 +142,41 @@ if HAS_TOML and hasattr(toml, 'TomlEncoder'):
                 AnsibleUnsafeBytes: self.dump_funcs.get(str),
                 AnsibleUnsafeText: self.dump_funcs.get(str),
             })
-    toml_dumps = partial(toml.dumps, encoder=AnsibleTomlEncoder())
+    toml_dumps = partial(toml.dumps, encoder=AnsibleTomlEncoder())  # type: t.Callable[[t.Any], str]
 else:
-    def toml_dumps(data):
-        return toml.dumps(convert_yaml_objects_to_native(data))
+    # toml<0.10.0
+    # tomli-w
+    def toml_dumps(data):  # type: (t.Any) -> str
+        if HAS_TOML:
+            return toml.dumps(convert_yaml_objects_to_native(data))
+        elif HAS_TOMLIW:
+            return tomli_w.dumps(convert_yaml_objects_to_native(data))
+        raise AnsibleRuntimeError(
+            'The python "toml" or "tomli-w" library is required when using the TOML output format'
+        )
+
+# loads
+if HAS_TOML:
+    # prefer toml if installed, since it supports both encoding and decoding
+    toml_loads = toml.loads  # type: ignore[assignment]
+    TOMLDecodeError = toml.TomlDecodeError  # type: t.Any
+elif HAS_TOMLLIB:
+    toml_loads = tomllib.loads  # type: ignore[assignment]
+    TOMLDecodeError = tomllib.TOMLDecodeError  # type: t.Any  # type: ignore[no-redef]
 
 
 def convert_yaml_objects_to_native(obj):
-    """Older versions of the ``toml`` python library, don't have a pluggable
-    way to tell the encoder about custom types, so we need to ensure objects
-    that we pass are native types.
+    """Older versions of the ``toml`` python library, and tomllib, don't have
+    a pluggable way to tell the encoder about custom types, so we need to
+    ensure objects that we pass are native types.
 
-    Only used on ``toml<0.10.0`` where ``toml.TomlEncoder`` is missing.
+    Used with:
+      - ``toml<0.10.0`` where ``toml.TomlEncoder`` is missing
+      - ``tomli`` or ``tomllib``
 
     This function recurses an object and ensures we cast any of the types from
     ``ansible.parsing.yaml.objects`` into their native types, effectively cleansing
-    the data before we hand it over to ``toml``
+    the data before we hand it over to the toml library.
 
     This function doesn't directly check for the types from ``ansible.parsing.yaml.objects``
     but instead checks for the types those objects inherit from, to offer more flexibility.
@@ -212,8 +248,8 @@ class InventoryModule(BaseFileInventoryPlugin):
 
         try:
             (b_data, private) = self.loader._get_file_contents(file_name)
-            return toml.loads(to_text(b_data, errors='surrogate_or_strict'))
-        except toml.TomlDecodeError as e:
+            return toml_loads(to_text(b_data, errors='surrogate_or_strict'))
+        except TOMLDecodeError as e:
             raise AnsibleParserError(
                 'TOML file (%s) is invalid: %s' % (file_name, to_native(e)),
                 orig_exc=e
@@ -231,12 +267,12 @@ class InventoryModule(BaseFileInventoryPlugin):
 
     def parse(self, inventory, loader, path, cache=True):
         ''' parses the inventory file '''
-        if not HAS_TOML:
+        if not HAS_TOMLLIB and not HAS_TOML:
+            # tomllib works here too, but we don't call it out in the error,
+            # since you either have it or not as part of cpython stdlib >= 3.11
             raise AnsibleParserError(
-                'The TOML inventory plugin requires the python "toml" library'
+                'The TOML inventory plugin requires the python "toml", or "tomli" library'
             )
-
-        display.warning(WARNING_MSG)
 
         super(InventoryModule, self).parse(inventory, loader, path)
         self.set_options()

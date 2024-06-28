@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # Copyright: (c) 2016, Krzysztof Magosa <krzysztof@magosa.pl>
@@ -15,9 +14,10 @@ module: tempfile
 version_added: "2.3"
 short_description: Creates temporary files and directories
 description:
-  - The C(tempfile) module creates temporary files and directories. C(mktemp) command takes different parameters on various systems, this module helps
-    to avoid troubles related to that. Files/directories created by module are accessible only by creator. In case you need to make them world-accessible
-    you need to use M(ansible.builtin.file) module.
+  - The M(ansible.builtin.tempfile) module creates temporary files and directories. C(mktemp) command
+    takes different parameters on various systems, this module helps to avoid troubles related to that.
+    Files/directories created by module are accessible only by creator. In case you need to make them
+    world-accessible you need to use M(ansible.builtin.file) module.
   - For Windows targets, use the M(ansible.windows.win_tempfile) module instead.
 options:
   state:
@@ -41,6 +41,14 @@ options:
       - Suffix of file/directory name created by module.
     type: str
     default: ""
+extends_documentation_fragment: action_common_attributes
+attributes:
+    check_mode:
+        support: none
+    diff_mode:
+        support: none
+    platform:
+        platforms: posix
 seealso:
 - module: ansible.builtin.file
 - module: ansible.windows.win_tempfile
@@ -80,7 +88,7 @@ from tempfile import mkstemp, mkdtemp
 from traceback import format_exc
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 
 def main():
@@ -101,7 +109,7 @@ def main():
                 dir=module.params['path'],
             )
             close(handle)
-        elif module.params['state'] == 'directory':
+        else:
             path = mkdtemp(
                 prefix=module.params['prefix'],
                 suffix=module.params['suffix'],

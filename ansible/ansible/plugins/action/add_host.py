@@ -20,8 +20,9 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+from collections.abc import Mapping
+
 from ansible.errors import AnsibleActionFail
-from ansible.module_utils.common._collections_compat import Mapping
 from ansible.module_utils.six import string_types
 from ansible.plugins.action import ActionBase
 from ansible.parsing.utils.addresses import parse_address
@@ -36,11 +37,10 @@ class ActionModule(ActionBase):
 
     # We need to be able to modify the inventory
     BYPASS_HOST_LOOP = True
-    TRANSFERS_FILES = False
+    _requires_connection = False
+    _supports_check_mode = True
 
     def run(self, tmp=None, task_vars=None):
-
-        self._supports_check_mode = True
 
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect

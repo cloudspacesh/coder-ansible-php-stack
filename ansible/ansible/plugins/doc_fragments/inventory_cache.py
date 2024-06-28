@@ -67,7 +67,7 @@ options:
       - name: ANSIBLE_CACHE_PLUGIN_PREFIX
       - name: ANSIBLE_INVENTORY_CACHE_PLUGIN_PREFIX
     ini:
-      - section: default
+      - section: defaults
         key: fact_caching_prefix
       - section: inventory
         key: cache_prefix

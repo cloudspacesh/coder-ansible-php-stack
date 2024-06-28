@@ -8,7 +8,7 @@ __metaclass__ = type
 import json
 
 # Imported for backwards compat
-from ansible.module_utils.common.json import AnsibleJSONEncoder
+from ansible.module_utils.common.json import AnsibleJSONEncoder  # pylint: disable=unused-import
 
 from ansible.parsing.vault import VaultLib
 from ansible.parsing.yaml.objects import AnsibleVaultEncryptedUnicode
@@ -17,7 +17,7 @@ from ansible.utils.unsafe_proxy import wrap_var
 
 class AnsibleJSONDecoder(json.JSONDecoder):
 
-    _vaults = {}
+    _vaults = {}  # type: dict[str, VaultLib]
 
     def __init__(self, *args, **kwargs):
         kwargs['object_hook'] = self.object_hook

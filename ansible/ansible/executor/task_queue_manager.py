@@ -22,7 +22,10 @@ __metaclass__ = type
 import os
 import sys
 import tempfile
+import threading
 import time
+import typing as t
+import multiprocessing.queues
 
 from ansible import constants as C
 from ansible import context
@@ -31,23 +34,82 @@ from ansible.executor.play_iterator import PlayIterator
 from ansible.executor.stats import AggregateStats
 from ansible.executor.task_result import TaskResult
 from ansible.module_utils.six import string_types
-from ansible.module_utils._text import to_text, to_native
-from ansible.playbook.block import Block
+from ansible.module_utils.common.text.converters import to_text, to_native
 from ansible.playbook.play_context import PlayContext
+from ansible.playbook.task import Task
 from ansible.plugins.loader import callback_loader, strategy_loader, module_loader
 from ansible.plugins.callback import CallbackBase
 from ansible.template import Templar
-from ansible.utils.collection_loader import AnsibleCollectionRef
-from ansible.utils.helpers import pct_to_int
 from ansible.vars.hostvars import HostVars
 from ansible.vars.reserved import warn_if_reserved
 from ansible.utils.display import Display
+from ansible.utils.lock import lock_decorator
 from ansible.utils.multiprocessing import context as multiprocessing_context
 
+from dataclasses import dataclass
 
 __all__ = ['TaskQueueManager']
 
 display = Display()
+
+
+class CallbackSend:
+    def __init__(self, method_name, *args, **kwargs):
+        self.method_name = method_name
+        self.args = args
+        self.kwargs = kwargs
+
+
+class DisplaySend:
+    def __init__(self, method, *args, **kwargs):
+        self.method = method
+        self.args = args
+        self.kwargs = kwargs
+
+
+@dataclass
+class PromptSend:
+    worker_id: int
+    prompt: str
+    private: bool = True
+    seconds: int = None
+    interrupt_input: t.Iterable[bytes] = None
+    complete_input: t.Iterable[bytes] = None
+
+
+class FinalQueue(multiprocessing.queues.SimpleQueue):
+    def __init__(self, *args, **kwargs):
+        kwargs['ctx'] = multiprocessing_context
+        super().__init__(*args, **kwargs)
+
+    def send_callback(self, method_name, *args, **kwargs):
+        self.put(
+            CallbackSend(method_name, *args, **kwargs),
+        )
+
+    def send_task_result(self, *args, **kwargs):
+        if isinstance(args[0], TaskResult):
+            tr = args[0]
+        else:
+            tr = TaskResult(*args, **kwargs)
+        self.put(
+            tr,
+        )
+
+    def send_display(self, method, *args, **kwargs):
+        self.put(
+            DisplaySend(method, *args, **kwargs),
+        )
+
+    def send_prompt(self, **kwargs):
+        self.put(
+            PromptSend(**kwargs),
+        )
+
+
+class AnsibleEndPlay(Exception):
+    def __init__(self, result):
+        self.result = result
 
 
 class TaskQueueManager:
@@ -99,9 +161,11 @@ class TaskQueueManager:
         self._unreachable_hosts = dict()
 
         try:
-            self._final_q = multiprocessing_context.Queue()
+            self._final_q = FinalQueue()
         except OSError as e:
             raise AnsibleError("Unable to use multiprocessing, this is normally caused by lack of access to /dev/shm: %s" % to_native(e))
+
+        self._callback_lock = threading.Lock()
 
         # A temporary file (opened pre-fork) used by connection
         # plugins for inter-process locking.
@@ -142,8 +206,8 @@ class TaskQueueManager:
         # get all configured loadable callbacks (adjacent, builtin)
         callback_list = list(callback_loader.all(class_only=True))
 
-        # add whitelisted callbacks that refer to collections, which might not appear in normal listing
-        for c in C.DEFAULT_CALLBACK_WHITELIST:
+        # add enabled callbacks that refer to collections, which might not appear in normal listing
+        for c in C.CALLBACKS_ENABLED:
             # load all, as collection ones might be using short/redirected names and not a fqcn
             plugin = callback_loader.get(c, class_only=True)
 
@@ -159,16 +223,16 @@ class TaskQueueManager:
         for callback_plugin in callback_list:
 
             callback_type = getattr(callback_plugin, 'CALLBACK_TYPE', '')
-            callback_needs_whitelist = getattr(callback_plugin, 'CALLBACK_NEEDS_WHITELIST', False)
+            callback_needs_enabled = getattr(callback_plugin, 'CALLBACK_NEEDS_ENABLED', getattr(callback_plugin, 'CALLBACK_NEEDS_WHITELIST', False))
 
-            # try to get collection world name first
+            # try to get colleciotn world name first
             cnames = getattr(callback_plugin, '_redirected_names', [])
             if cnames:
                 # store the name the plugin was loaded as, as that's what we'll need to compare to the configured callback list later
                 callback_name = cnames[0]
             else:
                 # fallback to 'old loader name'
-                (callback_name, _) = os.path.splitext(os.path.basename(callback_plugin._original_path))
+                (callback_name, ext) = os.path.splitext(os.path.basename(callback_plugin._original_path))
 
             display.vvvvv("Attempting to use '%s' callback." % (callback_name))
             if callback_type == 'stdout':
@@ -180,10 +244,10 @@ class TaskQueueManager:
             elif callback_name == 'tree' and self._run_tree:
                 # TODO: remove special case for tree, which is an adhoc cli option --tree
                 pass
-            elif not self._run_additional_callbacks or (callback_needs_whitelist and (
+            elif not self._run_additional_callbacks or (callback_needs_enabled and (
                 # only run if not adhoc, or adhoc was specifically configured to run + check enabled list
-                    C.DEFAULT_CALLBACK_WHITELIST is None or callback_name not in C.DEFAULT_CALLBACK_WHITELIST)):
-                # 2.x plugins shipped with ansible should require whitelisting, older or non shipped should load automatically
+                    C.CALLBACKS_ENABLED is None or callback_name not in C.CALLBACKS_ENABLED)):
+                # 2.x plugins shipped with ansible should require enabling, older or non shipped should load automatically
                 continue
 
             try:
@@ -219,8 +283,8 @@ class TaskQueueManager:
             self.load_callbacks()
 
         all_vars = self._variable_manager.get_vars(play=play)
-        warn_if_reserved(all_vars)
         templar = Templar(loader=self._loader, variables=all_vars)
+        warn_if_reserved(all_vars, templar.environment.globals.keys())
 
         new_play = play.copy()
         new_play.post_validate(templar)
@@ -268,6 +332,8 @@ class TaskQueueManager:
         for host_name in self._failed_hosts.keys():
             host = self._inventory.get_host(host_name)
             iterator.mark_host_failed(host)
+        for host_name in self._unreachable_hosts.keys():
+            iterator._play._removed_hosts.append(host_name)
 
         self.clear_failed_hosts()
 
@@ -278,14 +344,19 @@ class TaskQueueManager:
             self._start_at_done = True
 
         # and run the play using the strategy and cleanup on way out
-        play_return = strategy.run(iterator, play_context)
+        try:
+            play_return = strategy.run(iterator, play_context)
+        finally:
+            strategy.cleanup()
+            self._cleanup_processes()
 
         # now re-save the hosts that failed from the iterator to our internal list
         for host_name in iterator.get_failed_hosts():
             self._failed_hosts[host_name] = True
 
-        strategy.cleanup()
-        self._cleanup_processes()
+        if iterator.end_play:
+            raise AnsibleEndPlay(play_return)
+
         return play_return
 
     def cleanup(self):
@@ -293,22 +364,10 @@ class TaskQueueManager:
         self.terminate()
         self._final_q.close()
         self._cleanup_processes()
-
-        # A bug exists in Python 2.6 that causes an exception to be raised during
-        # interpreter shutdown. This is only an issue in our CI testing but we
-        # hit it frequently enough to add a small sleep to avoid the issue.
-        # This can be removed once we have split controller available in CI.
-        #
-        # Further information:
-        #     Issue: https://bugs.python.org/issue4106
-        #     Fix:   https://hg.python.org/cpython/rev/d316315a8781
-        #
-        try:
-            if (2, 6) == (sys.version_info[0:2]):
-                time.sleep(0.0001)
-        except (IndexError, AttributeError):
-            # In case there is an issue getting the version info, don't raise an Exception
-            pass
+        # We no longer flush on every write in ``Display.display``
+        # just ensure we've flushed during cleanup
+        sys.stdout.flush()
+        sys.stderr.flush()
 
     def _cleanup_processes(self):
         if hasattr(self, '_workers'):
@@ -357,6 +416,7 @@ class TaskQueueManager:
                 defunct = True
         return defunct
 
+    @lock_decorator(attr='_callback_lock')
     def send_callback(self, method_name, *args, **kwargs):
         for callback_plugin in [self._stdout_callback] + self._callback_plugins:
             # a plugin that set self.disabled to True will not be called
@@ -364,17 +424,27 @@ class TaskQueueManager:
             if getattr(callback_plugin, 'disabled', False):
                 continue
 
+            # a plugin can opt in to implicit tasks (such as meta). It does this
+            # by declaring self.wants_implicit_tasks = True.
+            wants_implicit_tasks = getattr(callback_plugin, 'wants_implicit_tasks', False)
+
             # try to find v2 method, fallback to v1 method, ignore callback if no method found
             methods = []
             for possible in [method_name, 'v2_on_any']:
                 gotit = getattr(callback_plugin, possible, None)
                 if gotit is None:
-                    gotit = getattr(callback_plugin, possible.replace('v2_', ''), None)
+                    gotit = getattr(callback_plugin, possible.removeprefix('v2_'), None)
                 if gotit is not None:
                     methods.append(gotit)
 
             # send clean copies
             new_args = []
+
+            # If we end up being given an implicit task, we'll set this flag in
+            # the loop below. If the plugin doesn't care about those, then we
+            # check and continue to the next iteration of the outer loop.
+            is_implicit_task = False
+
             for arg in args:
                 # FIXME: add play/task cleaners
                 if isinstance(arg, TaskResult):
@@ -383,6 +453,12 @@ class TaskQueueManager:
                 # elif isinstance(arg, Task):
                 else:
                     new_args.append(arg)
+
+                if isinstance(arg, Task) and arg.implicit:
+                    is_implicit_task = True
+
+            if is_implicit_task and not wants_implicit_tasks:
+                continue
 
             for method in methods:
                 try:

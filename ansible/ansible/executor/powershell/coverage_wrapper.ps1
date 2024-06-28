@@ -2,7 +2,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 param(
-    [Parameter(Mandatory=$true)][System.Collections.IDictionary]$Payload
+    [Parameter(Mandatory = $true)][System.Collections.IDictionary]$Payload
 )
 
 #AnsibleRequires -Wrapper module_wrapper
@@ -54,7 +54,7 @@ Function New-CoverageBreakpoint {
     $info
 }
 
-Function Compare-WhitelistPattern {
+Function Compare-PathFilterPattern {
     Param (
         [String[]]$Patterns,
         [String]$Path
@@ -85,7 +85,7 @@ $file_encoding = 'UTF8'
 try {
     $scripts = [System.Collections.Generic.List`1[System.Object]]@($script:common_functions)
 
-    $coverage_whitelist = $Payload.coverage.whitelist.Split(":", [StringSplitOptions]::RemoveEmptyEntries)
+    $coverage_path_filter = $Payload.coverage.path_filter.Split(":", [StringSplitOptions]::RemoveEmptyEntries)
 
     # We need to track what utils have already been added to the script for loading. This is because the load
     # order is important and can have module_utils that rely on other utils.
@@ -104,7 +104,7 @@ try {
         Set-Content -LiteralPath $util_path -Value $util_code -Encoding $file_encoding
 
         $ansible_path = $Payload.coverage.module_util_paths.$util_name
-        if ((Compare-WhitelistPattern -Patterns $coverage_whitelist -Path $ansible_path)) {
+        if ((Compare-PathFilterPattern -Patterns $coverage_path_filter -Path $ansible_path)) {
             $cov_params = @{
                 Path = $util_path
                 Code = $util_sb
@@ -133,7 +133,7 @@ try {
     $scripts.Add($module_path)
 
     $ansible_path = $Payload.coverage.module_path
-    if ((Compare-WhitelistPattern -Patterns $coverage_whitelist -Path $ansible_path)) {
+    if ((Compare-PathFilterPattern -Patterns $coverage_path_filter -Path $ansible_path)) {
         $cov_params = @{
             Path = $module_path
             Code = [ScriptBlock]::Create($module)
@@ -159,7 +159,8 @@ try {
 
     try {
         &$entrypoint @params
-    } finally {
+    }
+    finally {
         # Processing here is kept to an absolute minimum to make sure each task runtime is kept as small as
         # possible. Once all the tests have been run ansible-test will collect this info and process it locally in
         # one go.
@@ -180,14 +181,16 @@ try {
         $utf8_no_bom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
         [System.IO.File]::WriteAllbytes($coverage_output_path, $utf8_no_bom.GetBytes($code_cov_json))
     }
-} finally {
+}
+finally {
     try {
         if ($breakpoint_info) {
             foreach ($b in $breakpoint_info.Breakpoints) {
                 Remove-PSBreakpoint -Breakpoint $b
             }
         }
-    } finally {
+    }
+    finally {
         Write-AnsibleLog "INFO - Remove temp coverage folder '$temp_path'" "coverage_wrapper"
         Remove-Item -LiteralPath $temp_path -Force -Recurse
     }

@@ -6,10 +6,10 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+from collections.abc import MutableMapping
 
 from ansible import constants as C
 from ansible.errors import AnsibleError
-from ansible.module_utils.common._collections_compat import MutableMapping
 from ansible.plugins.loader import cache_loader
 from ansible.utils.display import Display
 
@@ -68,44 +68,5 @@ class FactCache(MutableMapping):
                 host_facts[key] = host_cache
         except KeyError:
             pass
-
-        super(FactCache, self).update(host_facts)
-
-    def update(self, *args):
-        """
-        Backwards compat shim
-
-        We thought we needed this to ensure we always called the plugin's set() method but
-        MutableMapping.update() will call our __setitem__() just fine.  It's the calls to update
-        that we need to be careful of.  This contains a bug::
-
-            fact_cache[host.name].update(facts)
-
-        It retrieves a *copy* of the facts for host.name and then updates the copy.  So the changes
-        aren't persisted.
-
-        Instead we need to do::
-
-            fact_cache.update({host.name, facts})
-
-        Which will use FactCache's update() method.
-
-        We currently need this shim for backwards compat because the update() method that we had
-        implemented took key and value as arguments instead of taking a dict.  We can remove the
-        shim in 2.12 as MutableMapping.update() should do everything that we need.
-        """
-        if len(args) == 2:
-            # Deprecated.  Call the new function with this name
-            display.deprecated('Calling FactCache().update(key, value) is deprecated.  Use'
-                               ' FactCache().first_order_merge(key, value) if you want the old'
-                               ' behaviour or use FactCache().update({key: value}) if you want'
-                               ' dict-like behaviour.', version='2.12', collection_name='ansible.builtin')
-            return self.first_order_merge(*args)
-
-        elif len(args) == 1:
-            host_facts = args[0]
-
-        else:
-            raise TypeError('update expected at most 1 argument, got {0}'.format(len(args)))
 
         super(FactCache, self).update(host_facts)

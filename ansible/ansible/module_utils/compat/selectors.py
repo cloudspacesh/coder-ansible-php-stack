@@ -35,8 +35,8 @@ _BUNDLED_METADATA = {"pypi_name": "selectors2", "version": "1.1.1", "version_con
 #   Fix use of OSError exception for py3 and use the wrapper of kqueue.control so retries of
 #   interrupted syscalls work with kqueue
 
-import os.path
 import sys
+import types  # pylint: disable=unused-import
 
 try:
     # Python 3.4+
@@ -44,13 +44,13 @@ try:
 except ImportError:
     try:
         # backport package installed in the system
-        import selectors2 as _system_selectors
+        import selectors2 as _system_selectors  # type: ignore[no-redef]
     except ImportError:
-        _system_selectors = None
+        _system_selectors = None  # type: types.ModuleType | None  # type: ignore[no-redef]
 
 if _system_selectors:
     selectors = _system_selectors
 else:
     # Our bundled copy
-    from ansible.module_utils.compat import _selectors2 as selectors
+    from ansible.module_utils.compat import _selectors2 as selectors  # type: ignore[no-redef]
 sys.modules['ansible.module_utils.compat.selectors'] = selectors

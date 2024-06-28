@@ -19,13 +19,31 @@ options:
         key: remote_tmp
     vars:
       - name: ansible_remote_tmp
+  common_remote_group:
+    name: Enables changing the group ownership of temporary files and directories
+    default: null
+    description:
+      - Checked when Ansible needs to execute a module as a different user.
+      - If setfacl and chown both fail and do not let the different user access the module's files, they will be chgrp'd to this group.
+      - In order for this to work, the remote_user and become_user must share a common group and this setting must be set to that group.
+    env: [{name: ANSIBLE_COMMON_REMOTE_GROUP}]
+    vars:
+      - name: ansible_common_remote_group
+    ini:
+    - {key: common_remote_group, section: defaults}
+    version_added: "2.10"
   system_tmpdirs:
     description:
-       - "List of valid system temporary directories for Ansible to choose when it cannot use
-         ``remote_tmp``, normally due to permission issues.  These must be world readable, writable,
-         and executable."
+       - "List of valid system temporary directories on the managed machine for Ansible to validate
+         O(remote_tmp) against, when specific permissions are needed.  These must be world
+         readable, writable, and executable. This list should only contain directories which the
+         system administrator has pre-created with the proper ownership and permissions otherwise
+         security issues can arise."
+       - When O(remote_tmp) is required to be a system temp dir and it does not match any in the list,
+         the first one from the list will be used instead.
     default: [ /var/tmp, /tmp ]
     type: list
+    elements: string
     env: [{name: ANSIBLE_SYSTEM_TMPDIRS}]
     ini:
       - section: defaults
@@ -43,12 +61,16 @@ options:
     vars:
       - name: ansible_async_dir
   environment:
-    type: dict
-    default: {}
+    type: list
+    elements: dictionary
+    default: [{}]
     description:
-      - dictionary of environment variables and their values to use when executing commands.
+      - List of dictionaries of environment variables and their values to use when executing commands.
+    keyword:
+      - name: environment
   admin_users:
     type: list
+    elements: string
     default: ['root', 'toor']
     description:
       - list of users to be expected to have admin privileges. This is used by the controller to

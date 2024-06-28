@@ -5,7 +5,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = """
-    lookup: random_choice
+    name: random_choice
     author: Michael DeHaan
     version_added: "1.1"
     short_description: return random element from list
@@ -17,7 +17,7 @@ DOCUMENTATION = """
 
 EXAMPLES = """
 - name: Magic 8 ball for MUDs
-  debug:
+  ansible.builtin.debug:
     msg: "{{ item }}"
   with_random_choice:
      - "go through the door"
@@ -35,13 +35,13 @@ RETURN = """
 import random
 
 from ansible.errors import AnsibleError
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 from ansible.plugins.lookup import LookupBase
 
 
 class LookupModule(LookupBase):
 
-    def run(self, terms, inject=None, **kwargs):
+    def run(self, terms, variables=None, **kwargs):
 
         ret = terms
         if terms:

@@ -16,17 +16,13 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    strategy: debug
+    name: debug
     short_description: Executes tasks in interactive debug session.
     description:
         - Task execution is 'linear' but controlled by an interactive debug session.
     version_added: "2.1"
     author: Kishin Yagami (!UNKNOWN)
 '''
-
-import cmd
-import pprint
-import sys
 
 from ansible.plugins.strategy.linear import StrategyModule as LinearStrategyModule
 

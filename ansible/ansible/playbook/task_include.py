@@ -21,7 +21,6 @@ __metaclass__ = type
 
 import ansible.constants as C
 from ansible.errors import AnsibleParserError
-from ansible.playbook.attribute import FieldAttribute
 from ansible.playbook.block import Block
 from ansible.playbook.task import Task
 from ansible.utils.display import Display
@@ -36,20 +35,15 @@ class TaskInclude(Task):
 
     """
     A task include is derived from a regular task to handle the special
-    circumstances related to the `- include: ...` task.
+    circumstances related to the `- include_*: ...` task.
     """
 
     BASE = frozenset(('file', '_raw_params'))  # directly assigned
     OTHER_ARGS = frozenset(('apply',))  # assigned to matching property
     VALID_ARGS = BASE.union(OTHER_ARGS)  # all valid args
     VALID_INCLUDE_KEYWORDS = frozenset(('action', 'args', 'collections', 'debugger', 'ignore_errors', 'loop', 'loop_control',
-                                        'loop_with', 'name', 'no_log', 'register', 'run_once', 'tags', 'vars',
+                                        'loop_with', 'name', 'no_log', 'register', 'run_once', 'tags', 'timeout', 'vars',
                                         'when'))
-
-    # =================================================================================
-    # ATTRIBUTES
-
-    _static = FieldAttribute(isa='bool', default=None)
 
     def __init__(self, block=None, role=None, task_include=None):
         super(TaskInclude, self).__init__(block=block, role=role, task_include=task_include)
@@ -110,29 +104,6 @@ class TaskInclude(Task):
         new_me = super(TaskInclude, self).copy(exclude_parent=exclude_parent, exclude_tasks=exclude_tasks)
         new_me.statically_loaded = self.statically_loaded
         return new_me
-
-    def get_vars(self):
-        '''
-        We override the parent Task() classes get_vars here because
-        we need to include the args of the include into the vars as
-        they are params to the included tasks. But ONLY for 'include'
-        '''
-        if self.action not in C._ACTION_INCLUDE:
-            all_vars = super(TaskInclude, self).get_vars()
-        else:
-            all_vars = dict()
-            if self._parent:
-                all_vars.update(self._parent.get_vars())
-
-            all_vars.update(self.vars)
-            all_vars.update(self.args)
-
-            if 'tags' in all_vars:
-                del all_vars['tags']
-            if 'when' in all_vars:
-                del all_vars['when']
-
-        return all_vars
 
     def build_parent_block(self):
         '''

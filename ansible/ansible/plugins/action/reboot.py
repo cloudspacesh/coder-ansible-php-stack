@@ -8,12 +8,11 @@ __metaclass__ = type
 import random
 import time
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ansible.errors import AnsibleError, AnsibleConnectionFailure
-from ansible.module_utils._text import to_native, to_text
-from ansible.module_utils.common.collections import is_string
-from ansible.module_utils.common.validation import check_type_str
+from ansible.module_utils.common.text.converters import to_native, to_text
+from ansible.module_utils.common.validation import check_type_list, check_type_str
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
 
@@ -32,9 +31,10 @@ class ActionModule(ActionBase):
         'msg',
         'post_reboot_delay',
         'pre_reboot_delay',
-        'test_command',
+        'reboot_command',
         'reboot_timeout',
-        'search_paths'
+        'search_paths',
+        'test_command',
     ))
 
     DEFAULT_REBOOT_TIMEOUT = 600
@@ -48,7 +48,7 @@ class ActionModule(ActionBase):
     DEFAULT_SHUTDOWN_COMMAND_ARGS = '-r {delay_min} "{message}"'
     DEFAULT_SUDOABLE = True
 
-    DEPRECATED_ARGS = {}
+    DEPRECATED_ARGS = {}  # type: dict[str, str]
 
     BOOT_TIME_COMMANDS = {
         'freebsd': '/sbin/sysctl kern.boottime',
@@ -114,11 +114,25 @@ class ActionModule(ActionBase):
         return value
 
     def get_shutdown_command_args(self, distribution):
-        args = self._get_value_from_facts('SHUTDOWN_COMMAND_ARGS', distribution, 'DEFAULT_SHUTDOWN_COMMAND_ARGS')
-        # Convert seconds to minutes. If less that 60, set it to 0.
-        delay_min = self.pre_reboot_delay // 60
-        reboot_message = self._task.args.get('msg', self.DEFAULT_REBOOT_MESSAGE)
-        return args.format(delay_sec=self.pre_reboot_delay, delay_min=delay_min, message=reboot_message)
+        reboot_command = self._task.args.get('reboot_command')
+        if reboot_command is not None:
+            try:
+                reboot_command = check_type_str(reboot_command, allow_conversion=False)
+            except TypeError as e:
+                raise AnsibleError("Invalid value given for 'reboot_command': %s." % to_native(e))
+
+            # No args were provided
+            try:
+                return reboot_command.split(' ', 1)[1]
+            except IndexError:
+                return ''
+        else:
+            args = self._get_value_from_facts('SHUTDOWN_COMMAND_ARGS', distribution, 'DEFAULT_SHUTDOWN_COMMAND_ARGS')
+
+            # Convert seconds to minutes. If less than 60, set it to 0.
+            delay_min = self.pre_reboot_delay // 60
+            reboot_message = self._task.args.get('msg', self.DEFAULT_REBOOT_MESSAGE)
+            return args.format(delay_sec=self.pre_reboot_delay, delay_min=delay_min, message=reboot_message)
 
     def get_distribution(self, task_vars):
         # FIXME: only execute the module if we don't already have the facts we need
@@ -142,44 +156,49 @@ class ActionModule(ActionBase):
             raise AnsibleError('Failed to get distribution information. Missing "{0}" in output.'.format(ke.args[0]))
 
     def get_shutdown_command(self, task_vars, distribution):
-        shutdown_bin = self._get_value_from_facts('SHUTDOWN_COMMANDS', distribution, 'DEFAULT_SHUTDOWN_COMMAND')
-        default_search_paths = ['/sbin', '/usr/sbin', '/usr/local/sbin']
-        search_paths = self._task.args.get('search_paths', default_search_paths)
+        reboot_command = self._task.args.get('reboot_command')
+        if reboot_command is not None:
+            try:
+                reboot_command = check_type_str(reboot_command, allow_conversion=False)
+            except TypeError as e:
+                raise AnsibleError("Invalid value given for 'reboot_command': %s." % to_native(e))
+            shutdown_bin = reboot_command.split(' ', 1)[0]
+        else:
+            shutdown_bin = self._get_value_from_facts('SHUTDOWN_COMMANDS', distribution, 'DEFAULT_SHUTDOWN_COMMAND')
 
-        # FIXME: switch all this to user arg spec validation methods when they are available
-        # Convert bare strings to a list
-        if is_string(search_paths):
-            search_paths = [search_paths]
+        if shutdown_bin[0] == '/':
+            return shutdown_bin
+        else:
+            default_search_paths = ['/sbin', '/bin', '/usr/sbin', '/usr/bin', '/usr/local/sbin']
+            search_paths = self._task.args.get('search_paths', default_search_paths)
 
-        # Error if we didn't get a list
-        err_msg = "'search_paths' must be a string or flat list of strings, got {0}"
-        try:
-            incorrect_type = any(not is_string(x) for x in search_paths)
-            if not isinstance(search_paths, list) or incorrect_type:
-                raise TypeError
-        except TypeError:
-            raise AnsibleError(err_msg.format(search_paths))
+            try:
+                # Convert bare strings to a list
+                search_paths = check_type_list(search_paths)
+            except TypeError:
+                err_msg = "'search_paths' must be a string or flat list of strings, got {0}"
+                raise AnsibleError(err_msg.format(search_paths))
 
-        display.debug('{action}: running find module looking in {paths} to get path for "{command}"'.format(
-            action=self._task.action,
-            command=shutdown_bin,
-            paths=search_paths))
-        find_result = self._execute_module(
-            task_vars=task_vars,
-            # prevent collection search by calling with ansible.legacy (still allows library/ override of find)
-            module_name='ansible.legacy.find',
-            module_args={
-                'paths': search_paths,
-                'patterns': [shutdown_bin],
-                'file_type': 'any'
-            }
-        )
+            display.debug('{action}: running find module looking in {paths} to get path for "{command}"'.format(
+                action=self._task.action,
+                command=shutdown_bin,
+                paths=search_paths))
 
-        full_path = [x['path'] for x in find_result['files']]
-        if not full_path:
-            raise AnsibleError('Unable to find command "{0}" in search paths: {1}'.format(shutdown_bin, search_paths))
-        self._shutdown_command = full_path[0]
-        return self._shutdown_command
+            find_result = self._execute_module(
+                task_vars=task_vars,
+                # prevent collection search by calling with ansible.legacy (still allows library/ override of find)
+                module_name='ansible.legacy.find',
+                module_args={
+                    'paths': search_paths,
+                    'patterns': [shutdown_bin],
+                    'file_type': 'any'
+                }
+            )
+
+            full_path = [x['path'] for x in find_result['files']]
+            if not full_path:
+                raise AnsibleError('Unable to find command "{0}" in search paths: {1}'.format(shutdown_bin, search_paths))
+            return full_path[0]
 
     def deprecated_args(self):
         for arg, version in self.DEPRECATED_ARGS.items():
@@ -217,7 +236,7 @@ class ActionModule(ActionBase):
         display.vvv("{action}: attempting to get system boot time".format(action=self._task.action))
         connect_timeout = self._task.args.get('connect_timeout', self._task.args.get('connect_timeout_sec', self.DEFAULT_CONNECT_TIMEOUT))
 
-        # override connection timeout from defaults to custom value
+        # override connection timeout from defaults to the custom value
         if connect_timeout:
             try:
                 display.debug("{action}: setting connect_timeout to {value}".format(action=self._task.action, value=connect_timeout))
@@ -261,14 +280,15 @@ class ActionModule(ActionBase):
         display.vvv("{action}: system successfully rebooted".format(action=self._task.action))
 
     def do_until_success_or_timeout(self, action, reboot_timeout, action_desc, distribution, action_kwargs=None):
-        max_end_time = datetime.utcnow() + timedelta(seconds=reboot_timeout)
+        max_end_time = datetime.now(timezone.utc) + timedelta(seconds=reboot_timeout)
         if action_kwargs is None:
             action_kwargs = {}
 
         fail_count = 0
         max_fail_sleep = 12
+        last_error_msg = ''
 
-        while datetime.utcnow() < max_end_time:
+        while datetime.now(timezone.utc) < max_end_time:
             try:
                 action(distribution=distribution, **action_kwargs)
                 if action_desc:
@@ -280,7 +300,7 @@ class ActionModule(ActionBase):
                         self._connection.reset()
                     except AnsibleConnectionFailure:
                         pass
-                # Use exponential backoff with a max timout, plus a little bit of randomness
+                # Use exponential backoff with a max timeout, plus a little bit of randomness
                 random_int = random.randint(0, 1000) / 1000
                 fail_sleep = 2 ** fail_count + random_int
                 if fail_sleep > max_fail_sleep:
@@ -291,14 +311,18 @@ class ActionModule(ActionBase):
                         error = to_text(e).splitlines()[-1]
                     except IndexError as e:
                         error = to_text(e)
-                    display.debug("{action}: {desc} fail '{err}', retrying in {sleep:.4} seconds...".format(
-                        action=self._task.action,
-                        desc=action_desc,
-                        err=error,
-                        sleep=fail_sleep))
+                    last_error_msg = f"{self._task.action}: {action_desc} fail '{error}'"
+                    msg = f"{last_error_msg}, retrying in {fail_sleep:.4f} seconds..."
+
+                    display.debug(msg)
+                    display.vvv(msg)
                 fail_count += 1
                 time.sleep(fail_sleep)
 
+        if last_error_msg:
+            msg = f"Last error message before the timeout exception - {last_error_msg}"
+            display.debug(msg)
+            display.vvv(msg)
         raise TimedOutException('Timed out waiting for {desc} (timeout={timeout})'.format(desc=action_desc, timeout=reboot_timeout))
 
     def perform_reboot(self, task_vars, distribution):
@@ -317,12 +341,12 @@ class ActionModule(ActionBase):
             display.debug('{action}: AnsibleConnectionFailure caught and handled: {error}'.format(action=self._task.action, error=to_text(e)))
             reboot_result['rc'] = 0
 
-        result['start'] = datetime.utcnow()
+        result['start'] = datetime.now(timezone.utc)
 
         if reboot_result['rc'] != 0:
             result['failed'] = True
             result['rebooted'] = False
-            result['msg'] = "Reboot command failed. Error was {stdout}, {stderr}".format(
+            result['msg'] = "Reboot command failed. Error was: '{stdout}, {stderr}'".format(
                 stdout=to_native(reboot_result['stdout'].strip()),
                 stderr=to_native(reboot_result['stderr'].strip()))
             return result
@@ -387,7 +411,7 @@ class ActionModule(ActionBase):
         self._supports_check_mode = True
         self._supports_async = True
 
-        # If running with local connection, fail so we don't reboot ourself
+        # If running with local connection, fail so we don't reboot ourselves
         if self._connection.transport == 'local':
             msg = 'Running {0} with local connection would reboot the control node.'.format(self._task.action)
             return {'changed': False, 'elapsed': 0, 'rebooted': False, 'failed': True, 'msg': msg}
@@ -428,7 +452,7 @@ class ActionModule(ActionBase):
 
         if reboot_result['failed']:
             result = reboot_result
-            elapsed = datetime.utcnow() - reboot_result['start']
+            elapsed = datetime.now(timezone.utc) - reboot_result['start']
             result['elapsed'] = elapsed.seconds
             return result
 
@@ -440,7 +464,7 @@ class ActionModule(ActionBase):
         # Make sure reboot was successful
         result = self.validate_reboot(distribution, original_connection_timeout, action_kwargs={'previous_boot_time': previous_boot_time})
 
-        elapsed = datetime.utcnow() - reboot_result['start']
+        elapsed = datetime.now(timezone.utc) - reboot_result['start']
         result['elapsed'] = elapsed.seconds
 
         return result

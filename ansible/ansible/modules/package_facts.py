@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # (c) 2017, Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -10,48 +9,65 @@ __metaclass__ = type
 
 DOCUMENTATION = '''
 module: package_facts
-short_description: package information as facts
+short_description: Package information as facts
 description:
-  - Return information about installed packages as facts
+  - Return information about installed packages as facts.
 options:
   manager:
     description:
       - The package manager used by the system so we can query the package information.
       - Since 2.8 this is a list and can support multiple package managers per system.
       - The 'portage' and 'pkg' options were added in version 2.8.
+      - The 'apk' option was added in version 2.11.
+      - The 'pkg_info' option was added in version 2.13.
     default: ['auto']
-    choices: ['auto', 'rpm', 'apt', 'portage', 'pkg', 'pacman']
-    required: False
+    choices: ['auto', 'rpm', 'apt', 'portage', 'pkg', 'pacman', 'apk', 'pkg_info']
     type: list
+    elements: str
   strategy:
     description:
       - This option controls how the module queries the package managers on the system.
-        C(first) means it will return only information for the first supported package manager available.
-        C(all) will return information for all supported and available package managers on the system.
+        V(first) means it will return only information for the first supported package manager available.
+        V(all) will return information for all supported and available package managers on the system.
     choices: ['first', 'all']
     default: 'first'
+    type: str
     version_added: "2.8"
 version_added: "2.5"
 requirements:
     - For 'portage' support it requires the C(qlist) utility, which is part of 'app-portage/portage-utils'.
     - For Debian-based systems C(python-apt) package must be installed on targeted hosts.
+    - For SUSE-based systems C(python3-rpm) package must be installed on targeted hosts.
+      This package is required because SUSE does not include RPM Python bindings by default.
 author:
   - Matthew Jones (@matburt)
   - Brian Coca (@bcoca)
   - Adam Miller (@maxamillion)
+extends_documentation_fragment:
+  -  action_common_attributes
+  -  action_common_attributes.facts
+attributes:
+    check_mode:
+        support: full
+    diff_mode:
+        support: none
+    facts:
+        support: full
+    platform:
+        platforms: posix
 '''
 
 EXAMPLES = '''
 - name: Gather the package facts
-  package_facts:
+  ansible.builtin.package_facts:
     manager: auto
 
 - name: Print the package facts
-  debug:
+  ansible.builtin.debug:
     var: ansible_facts.packages
 
 - name: Check whether a package called foobar is installed
-  debug:
+  ansible.builtin.debug:
     msg: "{{ ansible_facts.packages['foobar'] | length }} versions of foobar are installed!"
   when: "'foobar' in ansible_facts.packages"
 
@@ -59,7 +75,7 @@ EXAMPLES = '''
 
 RETURN = '''
 ansible_facts:
-  description: facts to add to ansible_facts
+  description: Facts to add to ansible_facts.
   returned: always
   type: complex
   contains:
@@ -201,13 +217,34 @@ ansible_facts:
             ],
           }
         }
+        # Sample pkg_info
+        {
+          "packages": {
+            "curl": [
+              {
+                  "name": "curl",
+                  "source": "pkg_info",
+                  "version": "7.79.0"
+              }
+            ],
+            "intel-firmware": [
+              {
+                  "name": "intel-firmware",
+                  "source": "pkg_info",
+                  "version": "20210608v0"
+              }
+            ],
+          }
+        }
 '''
 
 import re
 
-from ansible.module_utils._text import to_native, to_text
+from ansible.module_utils.common.text.converters import to_native, to_text
 from ansible.module_utils.basic import AnsibleModule, missing_required_lib
+from ansible.module_utils.common.locale import get_best_parsable_locale
 from ansible.module_utils.common.process import get_bin_path
+from ansible.module_utils.common.respawn import has_respawned, probe_interpreters_for_module, respawn_module
 from ansible.module_utils.facts.packages import LibMgr, CLIMgr, get_all_pkg_managers
 
 
@@ -231,8 +268,19 @@ class RPM(LibMgr):
 
         try:
             get_bin_path('rpm')
+
+            if not we_have_lib and not has_respawned():
+                # try to locate an interpreter with the necessary lib
+                interpreters = ['/usr/libexec/platform-python',
+                                '/usr/bin/python3',
+                                '/usr/bin/python2']
+                interpreter_path = probe_interpreters_for_module(interpreters, self.LIB)
+                if interpreter_path:
+                    respawn_module(interpreter_path)
+                    # end of the line for this process; this module will exit when the respawned copy completes
+
             if not we_have_lib:
-                module.warn('Found "rpm" but %s' % (missing_required_lib('rpm')))
+                module.warn('Found "rpm" but %s' % (missing_required_lib(self.LIB)))
         except ValueError:
             pass
 
@@ -265,8 +313,18 @@ class APT(LibMgr):
                 except ValueError:
                     continue
                 else:
+                    if not has_respawned():
+                        # try to locate an interpreter with the necessary lib
+                        interpreters = ['/usr/bin/python3',
+                                        '/usr/bin/python2']
+                        interpreter_path = probe_interpreters_for_module(interpreters, self.LIB)
+                        if interpreter_path:
+                            respawn_module(interpreter_path)
+                            # end of the line for this process; this module will exit here when respawned copy completes
+
                     module.warn('Found "%s" but %s' % (exe, missing_required_lib('apt')))
                     break
+
         return we_have_lib
 
     def list_installed(self):
@@ -284,7 +342,8 @@ class PACMAN(CLIMgr):
     CLI = 'pacman'
 
     def list_installed(self):
-        rc, out, err = module.run_command([self._cli, '-Qi'], environ_update=dict(LC_ALL='C'))
+        locale = get_best_parsable_locale(module)
+        rc, out, err = module.run_command([self._cli, '-Qi'], environ_update=dict(LC_ALL=locale))
         if rc != 0 or err:
             raise Exception("Unable to list packages rc=%s : %s" % (rc, err))
         return out.split("\n\n")[:-1]
@@ -376,6 +435,52 @@ class PORTAGE(CLIMgr):
         return dict(zip(self.atoms, package.split()))
 
 
+class APK(CLIMgr):
+
+    CLI = 'apk'
+
+    def list_installed(self):
+        rc, out, err = module.run_command([self._cli, 'info', '-v'])
+        if rc != 0 or err:
+            raise Exception("Unable to list packages rc=%s : %s" % (rc, err))
+        return out.splitlines()
+
+    def get_package_details(self, package):
+        raw_pkg_details = {'name': package, 'version': '', 'release': ''}
+        nvr = package.rsplit('-', 2)
+        try:
+            return {
+                'name': nvr[0],
+                'version': nvr[1],
+                'release': nvr[2],
+            }
+        except IndexError:
+            return raw_pkg_details
+
+
+class PKG_INFO(CLIMgr):
+
+    CLI = 'pkg_info'
+
+    def list_installed(self):
+        rc, out, err = module.run_command([self._cli, '-a'])
+        if rc != 0 or err:
+            raise Exception("Unable to list packages rc=%s : %s" % (rc, err))
+        return out.splitlines()
+
+    def get_package_details(self, package):
+        raw_pkg_details = {'name': package, 'version': ''}
+        details = package.split(maxsplit=1)[0].rsplit('-', maxsplit=1)
+
+        try:
+            return {
+                'name': details[0],
+                'version': details[1],
+            }
+        except IndexError:
+            return raw_pkg_details
+
+
 def main():
 
     # get supported pkg managers
@@ -384,7 +489,7 @@ def main():
 
     # start work
     global module
-    module = AnsibleModule(argument_spec=dict(manager={'type': 'list', 'default': ['auto']},
+    module = AnsibleModule(argument_spec=dict(manager={'type': 'list', 'elements': 'str', 'default': ['auto']},
                                               strategy={'choices': ['first', 'all'], 'default': 'first'}),
                            supports_check_mode=True)
     packages = {}

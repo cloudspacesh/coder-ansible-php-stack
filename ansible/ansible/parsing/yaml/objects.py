@@ -19,15 +19,12 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-import string
 import sys as _sys
 
-import sys
-import yaml
+from collections.abc import Sequence
 
-from ansible.module_utils.common._collections_compat import Sequence
 from ansible.module_utils.six import text_type
-from ansible.module_utils._text import to_bytes, to_text, to_native
+from ansible.module_utils.common.text.converters import to_bytes, to_text, to_native
 
 
 class AnsibleBaseYAMLObject(object):
@@ -58,17 +55,7 @@ class AnsibleBaseYAMLObject(object):
     ansible_pos = property(_get_ansible_position, _set_ansible_position)
 
 
-# try to always use orderddict with yaml, after py3.6 the dict type already does this
-odict = dict
-if sys.version_info[:2] < (3, 7):
-    # if python 2.7 or py3 < 3.7
-    try:
-        from collections import OrderedDict as odict
-    except ImportError:
-        pass
-
-
-class AnsibleMapping(AnsibleBaseYAMLObject, odict):
+class AnsibleMapping(AnsibleBaseYAMLObject, dict):
     ''' sub class for dictionaries '''
     pass
 
@@ -117,7 +104,7 @@ class AnsibleVaultEncryptedUnicode(Sequence, AnsibleBaseYAMLObject):
     def data(self):
         if not self.vault:
             return to_text(self._ciphertext)
-        return to_text(self.vault.decrypt(self._ciphertext))
+        return to_text(self.vault.decrypt(self._ciphertext, obj=self))
 
     @data.setter
     def data(self, value):
@@ -314,12 +301,7 @@ class AnsibleVaultEncryptedUnicode(Sequence, AnsibleBaseYAMLObject):
     def lstrip(self, chars=None):
         return self.data.lstrip(chars)
 
-    try:
-        # PY3
-        maketrans = str.maketrans
-    except AttributeError:
-        # PY2
-        maketrans = string.maketrans
+    maketrans = str.maketrans
 
     def partition(self, sep):
         return self.data.partition(sep)

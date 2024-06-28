@@ -100,7 +100,7 @@ class LookupBase(AnsiblePlugin):
         must be converted into python's unicode type as the strings will be run
         through jinja2 which has this requirement.  You can use::
 
-            from ansible.module_utils._text import to_text
+            from ansible.module_utils.common.text.converters import to_text
             result_string = to_text(result_string)
         """
         pass
@@ -117,9 +117,14 @@ class LookupBase(AnsiblePlugin):
 
         result = None
         try:
-            result = self._loader.path_dwim_relative_stack(paths, subdir, needle)
+            result = self._loader.path_dwim_relative_stack(paths, subdir, needle, is_role=bool('role_path' in myvars))
         except AnsibleFileNotFound:
             if not ignore_missing:
                 self._display.warning("Unable to find '%s' in expected paths (use -vvvvv to see paths)" % needle)
 
         return result
+
+    def _deprecate_inline_kv(self):
+        # TODO: place holder to deprecate in future version allowing for long transition period
+        # self._display.deprecated('Passing inline k=v values embedded in a string to this lookup. Use direct ,k=v, k2=v2 syntax instead.', version='2.18')
+        pass

@@ -10,9 +10,11 @@ import os
 import platform
 import re
 
+import ansible.module_utils.compat.typing as t
+
 from ansible.module_utils.common.sys_info import get_distribution, get_distribution_version, \
     get_distribution_codename
-from ansible.module_utils.facts.utils import get_file_content
+from ansible.module_utils.facts.utils import get_file_content, get_file_lines
 from ansible.module_utils.facts.collector import BaseFactCollector
 
 
@@ -55,9 +57,11 @@ class DistributionFiles:
         {'path': '/etc/altlinux-release', 'name': 'Altlinux'},
         {'path': '/etc/oracle-release', 'name': 'OracleLinux'},
         {'path': '/etc/slackware-version', 'name': 'Slackware'},
+        {'path': '/etc/centos-release', 'name': 'CentOS'},
         {'path': '/etc/redhat-release', 'name': 'RedHat'},
         {'path': '/etc/vmware-release', 'name': 'VMwareESX', 'allowempty': True},
         {'path': '/etc/openwrt_release', 'name': 'OpenWrt'},
+        {'path': '/etc/os-release', 'name': 'Amazon'},
         {'path': '/etc/system-release', 'name': 'Amazon'},
         {'path': '/etc/alpine-release', 'name': 'Alpine'},
         {'path': '/etc/arch-release', 'name': 'Archlinux', 'allowempty': True},
@@ -71,7 +75,7 @@ class DistributionFiles:
         {'path': '/etc/sourcemage-release', 'name': 'SMGL'},
         {'path': '/usr/lib/os-release', 'name': 'ClearLinux'},
         {'path': '/etc/coreos/update.conf', 'name': 'Coreos'},
-        {'path': '/etc/flatcar/update.conf', 'name': 'Flatcar'},
+        {'path': '/etc/os-release', 'name': 'Flatcar'},
         {'path': '/etc/os-release', 'name': 'NA'},
     )
 
@@ -136,7 +140,7 @@ class DistributionFiles:
             parsed, dist_file_dict = distfunc(name, dist_file_content, path, collected_facts)
             return parsed, dist_file_dict
         except AttributeError as exc:
-            print('exc: %s' % exc)
+            self.module.debug('exc: %s' % exc)
             # this should never happen, but if it does fail quietly and not with a traceback
             return False, dist_file_dict
 
@@ -221,9 +225,24 @@ class DistributionFiles:
         if 'Amazon' not in data:
             return False, amazon_facts
         amazon_facts['distribution'] = 'Amazon'
-        version = [n for n in data.split() if n.isdigit()]
-        version = version[0] if version else 'NA'
-        amazon_facts['distribution_version'] = version
+        if path == '/etc/os-release':
+            version = re.search(r"VERSION_ID=\"(.*)\"", data)
+            if version:
+                distribution_version = version.group(1)
+                amazon_facts['distribution_version'] = distribution_version
+                version_data = distribution_version.split(".")
+                if len(version_data) > 1:
+                    major, minor = version_data
+                else:
+                    major, minor = version_data[0], 'NA'
+
+                amazon_facts['distribution_major_version'] = major
+                amazon_facts['distribution_minor_version'] = minor
+        else:
+            version = [n for n in data.split() if n.isdigit()]
+            version = version[0] if version else 'NA'
+            amazon_facts['distribution_version'] = version
+
         return True, amazon_facts
 
     def parse_distribution_file_OpenWrt(self, name, data, path, collected_facts):
@@ -315,15 +334,24 @@ class DistributionFiles:
                     rc, out, err = self.module.run_command(cmd)
                     if rc == 0:
                         debian_facts['distribution_release'] = out.strip()
+            debian_version_path = '/etc/debian_version'
+            distdata = get_file_lines(debian_version_path)
+            for line in distdata:
+                m = re.search(r'(\d+)\.(\d+)', line.strip())
+                if m:
+                    debian_facts['distribution_minor_version'] = m.groups()[1]
         elif 'Ubuntu' in data:
             debian_facts['distribution'] = 'Ubuntu'
             # nothing else to do, Ubuntu gets correct info from python functions
         elif 'SteamOS' in data:
             debian_facts['distribution'] = 'SteamOS'
             # nothing else to do, SteamOS gets correct info from python functions
-        elif path in ('/etc/lsb-release', '/etc/os-release') and 'Kali' in data:
-            # Kali does not provide /etc/lsb-release anymore
-            debian_facts['distribution'] = 'Kali'
+        elif path in ('/etc/lsb-release', '/etc/os-release') and ('Kali' in data or 'Parrot' in data):
+            if 'Kali' in data:
+                # Kali does not provide /etc/lsb-release anymore
+                debian_facts['distribution'] = 'Kali'
+            elif 'Parrot' in data:
+                debian_facts['distribution'] = 'Parrot'
             release = re.search('DISTRIB_RELEASE=(.*)', data)
             if release:
                 debian_facts['distribution_release'] = release.groups()[0]
@@ -349,6 +377,24 @@ class DistributionFiles:
                 debian_facts['distribution_release'] = release.groups()[0]
         elif "Mint" in data:
             debian_facts['distribution'] = 'Linux Mint'
+            version = re.search(r"VERSION_ID=\"(.*)\"", data)
+            if version:
+                debian_facts['distribution_version'] = version.group(1)
+                debian_facts['distribution_major_version'] = version.group(1).split('.')[0]
+        elif 'UOS' in data or 'Uos' in data or 'uos' in data:
+            debian_facts['distribution'] = 'Uos'
+            release = re.search(r"VERSION_CODENAME=\"?([^\"]+)\"?", data)
+            if release:
+                debian_facts['distribution_release'] = release.groups()[0]
+            version = re.search(r"VERSION_ID=\"(.*)\"", data)
+            if version:
+                debian_facts['distribution_version'] = version.group(1)
+                debian_facts['distribution_major_version'] = version.group(1).split('.')[0]
+        elif 'Deepin' in data or 'deepin' in data:
+            debian_facts['distribution'] = 'Deepin'
+            release = re.search(r"VERSION_CODENAME=\"?([^\"]+)\"?", data)
+            if release:
+                debian_facts['distribution_release'] = release.groups()[0]
             version = re.search(r"VERSION_ID=\"(.*)\"", data)
             if version:
                 debian_facts['distribution_version'] = version.group(1)
@@ -407,14 +453,16 @@ class DistributionFiles:
         flatcar_facts = {}
         distro = get_distribution()
 
-        if distro.lower() == 'flatcar':
-            if not data:
-                return False, flatcar_facts
-            release = re.search("^GROUP=(.*)", data)
-            if release:
-                flatcar_facts['distribution_release'] = release.group(1).strip('"')
-        else:
+        if distro.lower() != 'flatcar':
             return False, flatcar_facts
+
+        if not data:
+            return False, flatcar_facts
+
+        version = re.search("VERSION=(.*)", data)
+        if version:
+            flatcar_facts['distribution_major_version'] = version.group(1).strip('"').split('.')[0]
+            flatcar_facts['distribution_version'] = version.group(1).strip('"')
 
         return True, flatcar_facts
 
@@ -437,6 +485,19 @@ class DistributionFiles:
             clear_facts['distribution_release'] = release.groups()[0]
         return True, clear_facts
 
+    def parse_distribution_file_CentOS(self, name, data, path, collected_facts):
+        centos_facts = {}
+
+        if 'CentOS Stream' in data:
+            centos_facts['distribution_release'] = 'Stream'
+            return True, centos_facts
+
+        if "TencentOS Server" in data:
+            centos_facts['distribution'] = 'TencentOS'
+            return True, centos_facts
+
+        return False, centos_facts
+
 
 class Distribution(object):
     """
@@ -447,48 +508,15 @@ class Distribution(object):
     This is unit tested. Please extend the tests to cover all distributions if you have them available.
     """
 
-    # every distribution name mentioned here, must have one of
-    #  - allowempty == True
-    #  - be listed in SEARCH_STRING
-    #  - have a function get_distribution_DISTNAME implemented
-    OSDIST_LIST = (
-        {'path': '/etc/oracle-release', 'name': 'OracleLinux'},
-        {'path': '/etc/slackware-version', 'name': 'Slackware'},
-        {'path': '/etc/redhat-release', 'name': 'RedHat'},
-        {'path': '/etc/vmware-release', 'name': 'VMwareESX', 'allowempty': True},
-        {'path': '/etc/openwrt_release', 'name': 'OpenWrt'},
-        {'path': '/etc/system-release', 'name': 'Amazon'},
-        {'path': '/etc/alpine-release', 'name': 'Alpine'},
-        {'path': '/etc/arch-release', 'name': 'Archlinux', 'allowempty': True},
-        {'path': '/etc/os-release', 'name': 'SUSE'},
-        {'path': '/etc/SuSE-release', 'name': 'SUSE'},
-        {'path': '/etc/gentoo-release', 'name': 'Gentoo'},
-        {'path': '/etc/os-release', 'name': 'Debian'},
-        {'path': '/etc/lsb-release', 'name': 'Mandriva'},
-        {'path': '/etc/altlinux-release', 'name': 'Altlinux'},
-        {'path': '/etc/sourcemage-release', 'name': 'SMGL'},
-        {'path': '/usr/lib/os-release', 'name': 'ClearLinux'},
-        {'path': '/etc/coreos/update.conf', 'name': 'Coreos'},
-        {'path': '/etc/flatcar/update.conf', 'name': 'Flatcar'},
-        {'path': '/etc/os-release', 'name': 'NA'},
-    )
-
-    SEARCH_STRING = {
-        'OracleLinux': 'Oracle Linux',
-        'RedHat': 'Red Hat',
-        'Altlinux': 'ALT Linux',
-        'ClearLinux': 'Clear Linux Software for Intel Architecture',
-        'SMGL': 'Source Mage GNU/Linux',
-    }
-
     # keep keys in sync with Conditionals page of docs
-    OS_FAMILY_MAP = {'RedHat': ['RedHat', 'Fedora', 'CentOS', 'Scientific', 'SLC',
+    OS_FAMILY_MAP = {'RedHat': ['RedHat', 'RHEL', 'Fedora', 'CentOS', 'Scientific', 'SLC',
                                 'Ascendos', 'CloudLinux', 'PSBM', 'OracleLinux', 'OVS',
                                 'OEL', 'Amazon', 'Virtuozzo', 'XenServer', 'Alibaba',
-                                'EulerOS', 'openEuler'],
+                                'EulerOS', 'openEuler', 'AlmaLinux', 'Rocky', 'TencentOS',
+                                'EuroLinux', 'Kylin Linux Advanced Server'],
                      'Debian': ['Debian', 'Ubuntu', 'Raspbian', 'Neon', 'KDE neon',
                                 'Linux Mint', 'SteamOS', 'Devuan', 'Kali', 'Cumulus Linux',
-                                'Pop!_OS', ],
+                                'Pop!_OS', 'Parrot', 'Pardus GNU/Linux', 'Uos', 'Deepin', 'OSMC'],
                      'Suse': ['SuSE', 'SLES', 'SLED', 'openSUSE', 'openSUSE Tumbleweed',
                               'SLES_SAP', 'SUSE_LINUX', 'openSUSE Leap'],
                      'Archlinux': ['Archlinux', 'Antergos', 'Manjaro'],
@@ -496,14 +524,16 @@ class Distribution(object):
                      'Solaris': ['Solaris', 'Nexenta', 'OmniOS', 'OpenIndiana', 'SmartOS'],
                      'Slackware': ['Slackware'],
                      'Altlinux': ['Altlinux'],
-                     'SGML': ['SGML'],
+                     'SMGL': ['SMGL'],
                      'Gentoo': ['Gentoo', 'Funtoo'],
                      'Alpine': ['Alpine'],
                      'AIX': ['AIX'],
                      'HP-UX': ['HPUX'],
                      'Darwin': ['MacOSX'],
                      'FreeBSD': ['FreeBSD', 'TrueOS'],
-                     'ClearLinux': ['Clear Linux OS', 'Clear Linux Mix']}
+                     'ClearLinux': ['Clear Linux OS', 'Clear Linux Mix'],
+                     'DragonFly': ['DragonflyBSD', 'DragonFlyBSD', 'Gentoo/DragonflyBSD', 'Gentoo/DragonFlyBSD'],
+                     'NetBSD': ['NetBSD'], }
 
     OS_FAMILY = {}
     for family, names in OS_FAMILY_MAP.items():
@@ -581,7 +611,7 @@ class Distribution(object):
     def get_distribution_FreeBSD(self):
         freebsd_facts = {}
         freebsd_facts['distribution_release'] = platform.release()
-        data = re.search(r'(\d+)\.(\d+)-(RELEASE|STABLE|CURRENT).*', freebsd_facts['distribution_release'])
+        data = re.search(r'(\d+)\.(\d+)-(RELEASE|STABLE|CURRENT|RC|PRERELEASE).*', freebsd_facts['distribution_release'])
         if 'trueos' in platform.version():
             freebsd_facts['distribution'] = 'TrueOS'
         if data:
@@ -601,13 +631,28 @@ class Distribution(object):
         return openbsd_facts
 
     def get_distribution_DragonFly(self):
-        return {}
+        dragonfly_facts = {
+            'distribution_release': platform.release()
+        }
+        rc, out, dummy = self.module.run_command("/sbin/sysctl -n kern.version")
+        match = re.search(r'v(\d+)\.(\d+)\.(\d+)-(RELEASE|STABLE|CURRENT).*', out)
+        if match:
+            dragonfly_facts['distribution_major_version'] = match.group(1)
+            dragonfly_facts['distribution_version'] = '%s.%s.%s' % match.groups()[:3]
+        return dragonfly_facts
 
     def get_distribution_NetBSD(self):
         netbsd_facts = {}
-        # FIXME: poking at self.facts, should eventually make these each a collector
         platform_release = platform.release()
-        netbsd_facts['distribution_major_version'] = platform_release.split('.')[0]
+        netbsd_facts['distribution_release'] = platform_release
+        rc, out, dummy = self.module.run_command("/sbin/sysctl -n kern.version")
+        match = re.match(r'NetBSD\s(\d+)\.(\d+)\s\((GENERIC)\).*', out)
+        if match:
+            netbsd_facts['distribution_major_version'] = match.group(1)
+            netbsd_facts['distribution_version'] = '%s.%s' % match.groups()[:2]
+        else:
+            netbsd_facts['distribution_major_version'] = platform_release.split('.')[0]
+            netbsd_facts['distribution_version'] = platform_release
         return netbsd_facts
 
     def get_distribution_SMGL(self):
@@ -667,7 +712,7 @@ class DistributionFactCollector(BaseFactCollector):
     _fact_ids = set(['distribution_version',
                      'distribution_release',
                      'distribution_major_version',
-                     'os_family'])
+                     'os_family'])  # type: t.Set[str]
 
     def collect(self, module=None, collected_facts=None):
         collected_facts = collected_facts or {}

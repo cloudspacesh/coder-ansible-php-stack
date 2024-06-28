@@ -24,21 +24,11 @@ import sys
 import traceback
 
 from jinja2.exceptions import TemplateNotFound
+from multiprocessing.queues import Queue
 
-HAS_PYCRYPTO_ATFORK = False
-try:
-    from Crypto.Random import atfork
-    HAS_PYCRYPTO_ATFORK = True
-except Exception:
-    # We only need to call atfork if pycrypto is used because it will need to
-    # reinitialize its RNG.  Since old paramiko could be using pycrypto, we
-    # need to take charge of calling it.
-    pass
-
-from ansible.errors import AnsibleConnectionFailure
+from ansible.errors import AnsibleConnectionFailure, AnsibleError
 from ansible.executor.task_executor import TaskExecutor
-from ansible.executor.task_result import TaskResult
-from ansible.module_utils._text import to_text
+from ansible.module_utils.common.text.converters import to_text
 from ansible.utils.display import Display
 from ansible.utils.multiprocessing import context as multiprocessing_context
 
@@ -46,15 +36,26 @@ __all__ = ['WorkerProcess']
 
 display = Display()
 
+current_worker = None
 
-class WorkerProcess(multiprocessing_context.Process):
+
+class WorkerQueue(Queue):
+    """Queue that raises AnsibleError items on get()."""
+    def get(self, *args, **kwargs):
+        result = super(WorkerQueue, self).get(*args, **kwargs)
+        if isinstance(result, AnsibleError):
+            raise result
+        return result
+
+
+class WorkerProcess(multiprocessing_context.Process):  # type: ignore[name-defined]
     '''
     The worker thread class, which uses TaskExecutor to run tasks
     read from a job queue and pushes results into a results queue
     for reading later.
     '''
 
-    def __init__(self, final_q, task_vars, host, task, play_context, loader, variable_manager, shared_loader_obj):
+    def __init__(self, final_q, task_vars, host, task, play_context, loader, variable_manager, shared_loader_obj, worker_id):
 
         super(WorkerProcess, self).__init__()
         # takes a task queue manager as the sole param:
@@ -71,35 +72,41 @@ class WorkerProcess(multiprocessing_context.Process):
         # clear var to ensure we only delete files for this child
         self._loader._tempfiles = set()
 
+        self.worker_queue = WorkerQueue(ctx=multiprocessing_context)
+        self.worker_id = worker_id
+
     def _save_stdin(self):
-        self._new_stdin = os.devnull
+        self._new_stdin = None
         try:
             if sys.stdin.isatty() and sys.stdin.fileno() is not None:
                 try:
                     self._new_stdin = os.fdopen(os.dup(sys.stdin.fileno()))
                 except OSError:
                     # couldn't dupe stdin, most likely because it's
-                    # not a valid file descriptor, so we just rely on
-                    # using the one that was passed in
+                    # not a valid file descriptor
                     pass
         except (AttributeError, ValueError):
-            # couldn't get stdin's fileno, so we just carry on
+            # couldn't get stdin's fileno
             pass
+
+        if self._new_stdin is None:
+            self._new_stdin = open(os.devnull)
 
     def start(self):
         '''
         multiprocessing.Process replaces the worker's stdin with a new file
-        opened on os.devnull, but we wish to preserve it if it is connected to
-        a terminal. Therefore dup a copy prior to calling the real start(),
+        but we wish to preserve it if it is connected to a terminal.
+        Therefore dup a copy prior to calling the real start(),
         ensuring the descriptor is preserved somewhere in the new child, and
         make sure it is closed in the parent when start() completes.
         '''
 
         self._save_stdin()
-        try:
-            return super(WorkerProcess, self).start()
-        finally:
-            if self._new_stdin != os.devnull:
+        # FUTURE: this lock can be removed once a more generalized pre-fork thread pause is in place
+        with display._lock:
+            try:
+                return super(WorkerProcess, self).start()
+            finally:
                 self._new_stdin.close()
 
     def _hard_exit(self, e):
@@ -134,6 +141,20 @@ class WorkerProcess(multiprocessing_context.Process):
             return self._run()
         except BaseException as e:
             self._hard_exit(e)
+        finally:
+            # This is a hack, pure and simple, to work around a potential deadlock
+            # in ``multiprocessing.Process`` when flushing stdout/stderr during process
+            # shutdown.
+            #
+            # We should no longer have a problem with ``Display``, as it now proxies over
+            # the queue from a fork. However, to avoid any issues with plugins that may
+            # be doing their own printing, this has been kept.
+            #
+            # This happens at the very end to avoid that deadlock, by simply side
+            # stepping it. This should not be treated as a long term fix.
+            #
+            # TODO: Evaluate migrating away from the ``fork`` multiprocessing start method.
+            sys.stdout = sys.stderr = open(os.devnull, 'w')
 
     def _run(self):
         '''
@@ -146,8 +167,11 @@ class WorkerProcess(multiprocessing_context.Process):
         # pr = cProfile.Profile()
         # pr.enable()
 
-        if HAS_PYCRYPTO_ATFORK:
-            atfork()
+        # Set the queue on Display so calls to Display.display are proxied over the queue
+        display.set_queue(self._final_q)
+
+        global current_worker
+        current_worker = self
 
         try:
             # execute the task and build a TaskResult from the result
@@ -160,47 +184,60 @@ class WorkerProcess(multiprocessing_context.Process):
                 self._new_stdin,
                 self._loader,
                 self._shared_loader_obj,
-                self._final_q
+                self._final_q,
+                self._variable_manager,
             ).run()
 
             display.debug("done running TaskExecutor() for %s/%s [%s]" % (self._host, self._task, self._task._uuid))
             self._host.vars = dict()
             self._host.groups = []
-            task_result = TaskResult(
-                self._host.name,
-                self._task._uuid,
-                executor_result,
-                task_fields=self._task.dump_attrs(),
-            )
 
             # put the result on the result queue
             display.debug("sending task result for task %s" % self._task._uuid)
-            self._final_q.put(task_result)
+            try:
+                self._final_q.send_task_result(
+                    self._host.name,
+                    self._task._uuid,
+                    executor_result,
+                    task_fields=self._task.dump_attrs(),
+                )
+            except Exception as e:
+                display.debug(f'failed to send task result ({e}), sending surrogate result')
+                self._final_q.send_task_result(
+                    self._host.name,
+                    self._task._uuid,
+                    # Overriding the task result, to represent the failure
+                    {
+                        'failed': True,
+                        'msg': f'{e}',
+                        'exception': traceback.format_exc(),
+                    },
+                    # The failure pickling may have been caused by the task attrs, omit for safety
+                    {},
+                )
             display.debug("done sending task result for task %s" % self._task._uuid)
 
         except AnsibleConnectionFailure:
             self._host.vars = dict()
             self._host.groups = []
-            task_result = TaskResult(
+            self._final_q.send_task_result(
                 self._host.name,
                 self._task._uuid,
                 dict(unreachable=True),
                 task_fields=self._task.dump_attrs(),
             )
-            self._final_q.put(task_result, block=False)
 
         except Exception as e:
             if not isinstance(e, (IOError, EOFError, KeyboardInterrupt, SystemExit)) or isinstance(e, TemplateNotFound):
                 try:
                     self._host.vars = dict()
                     self._host.groups = []
-                    task_result = TaskResult(
+                    self._final_q.send_task_result(
                         self._host.name,
                         self._task._uuid,
                         dict(failed=True, exception=to_text(traceback.format_exc()), stdout=''),
                         task_fields=self._task.dump_attrs(),
                     )
-                    self._final_q.put(task_result, block=False)
                 except Exception:
                     display.debug(u"WORKER EXCEPTION: %s" % to_text(e))
                     display.debug(u"WORKER TRACEBACK: %s" % to_text(traceback.format_exc()))

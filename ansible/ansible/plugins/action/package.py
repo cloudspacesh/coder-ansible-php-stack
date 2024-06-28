@@ -19,6 +19,7 @@ __metaclass__ = type
 
 from ansible.errors import AnsibleAction, AnsibleActionFail
 from ansible.executor.module_common import get_action_args_with_defaults
+from ansible.module_utils.facts.system.pkg_mgr import PKG_MGRS
 from ansible.plugins.action import ActionBase
 from ansible.utils.display import Display
 
@@ -29,8 +30,7 @@ class ActionModule(ActionBase):
 
     TRANSFERS_FILES = False
 
-    BUILTIN_PKG_MGR_MODULES = set(['apk', 'apt', 'dnf', 'homebrew', 'installp', 'macports', 'opkg', 'portage', 'pacman',
-                                   'pkg5', 'pkgin', 'pkgng', 'sorcery', 'svr4pkg', 'swdepot', 'swupd', 'urpmi', 'xbps', 'yum', 'zypper'])
+    BUILTIN_PKG_MGR_MODULES = {manager['name'] for manager in PKG_MGRS}
 
     def run(self, tmp=None, task_vars=None):
         ''' handler for package operations '''
@@ -71,8 +71,10 @@ class ActionModule(ActionBase):
                         del new_module_args['use']
 
                     # get defaults for specific module
+                    context = self._shared_loader_obj.module_loader.find_plugin_with_context(module, collection_list=self._task.collections)
                     new_module_args = get_action_args_with_defaults(
-                        module, new_module_args, self._task.module_defaults, self._templar, self._task._ansible_internal_redirect_list
+                        context.resolved_fqcn, new_module_args, self._task.module_defaults, self._templar,
+                        action_groups=self._task._parent._play._action_groups
                     )
 
                     if module in self.BUILTIN_PKG_MGR_MODULES:

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # Copyright: (c) 2012, Jeroen Hoekx <jeroen@hoekx.be>
@@ -13,7 +12,7 @@ DOCUMENTATION = r'''
 module: wait_for
 short_description: Waits for a condition before continuing
 description:
-     - You can wait for a set amount of time C(timeout), this is the default if nothing is specified or just C(timeout) is specified.
+     - You can wait for a set amount of time O(timeout), this is the default if nothing is specified or just O(timeout) is specified.
        This does not produce an error.
      - Waiting for a port to become available is useful for when services are not immediately available after their init scripts return
        which is true of certain Java application servers.
@@ -50,27 +49,28 @@ options:
   port:
     description:
       - Port number to poll.
-      - C(path) and C(port) are mutually exclusive parameters.
+      - O(path) and O(port) are mutually exclusive parameters.
     type: int
   active_connection_states:
     description:
       - The list of TCP connection states which are counted as active connections.
     type: list
+    elements: str
     default: [ ESTABLISHED, FIN_WAIT1, FIN_WAIT2, SYN_RECV, SYN_SENT, TIME_WAIT ]
     version_added: "2.3"
   state:
     description:
-      - Either C(present), C(started), or C(stopped), C(absent), or C(drained).
-      - When checking a port C(started) will ensure the port is open, C(stopped) will check that it is closed, C(drained) will check for active connections.
-      - When checking for a file or a search string C(present) or C(started) will ensure that the file or string is present before continuing,
-        C(absent) will check that file is absent or removed.
+      - Either V(present), V(started), or V(stopped), V(absent), or V(drained).
+      - When checking a port V(started) will ensure the port is open, V(stopped) will check that it is closed, V(drained) will check for active connections.
+      - When checking for a file or a search string V(present) or V(started) will ensure that the file or string is present before continuing,
+        V(absent) will check that file is absent or removed.
     type: str
     choices: [ absent, drained, present, started, stopped ]
     default: started
   path:
     description:
       - Path to a file on the filesystem that must exist before continuing.
-      - C(path) and C(port) are mutually exclusive parameters.
+      - O(path) and O(port) are mutually exclusive parameters.
     type: path
     version_added: "1.4"
   search_regex:
@@ -81,8 +81,9 @@ options:
     version_added: "1.4"
   exclude_hosts:
     description:
-      - List of hosts or IPs to ignore when looking for active TCP connections for C(drained) state.
+      - List of hosts or IPs to ignore when looking for active TCP connections for V(drained) state.
     type: list
+    elements: str
     version_added: "1.8"
   sleep:
     description:
@@ -96,6 +97,14 @@ options:
       - This overrides the normal error message from a failure to meet the required conditions.
     type: str
     version_added: "2.4"
+extends_documentation_fragment: action_common_attributes
+attributes:
+    check_mode:
+        support: none
+    diff_mode:
+        support: none
+    platform:
+        platforms: posix
 notes:
   - The ability to use search_regex with a port connection was added in Ansible 1.7.
   - Prior to Ansible 2.4, testing for the absence of a directory or UNIX socket did not work correctly.
@@ -116,65 +125,65 @@ author:
 
 EXAMPLES = r'''
 - name: Sleep for 300 seconds and continue with play
-  wait_for:
+  ansible.builtin.wait_for:
     timeout: 300
   delegate_to: localhost
 
 - name: Wait for port 8000 to become open on the host, don't start checking for 10 seconds
-  wait_for:
+  ansible.builtin.wait_for:
     port: 8000
     delay: 10
 
 - name: Waits for port 8000 of any IP to close active connections, don't start checking for 10 seconds
-  wait_for:
+  ansible.builtin.wait_for:
     host: 0.0.0.0
     port: 8000
     delay: 10
     state: drained
 
 - name: Wait for port 8000 of any IP to close active connections, ignoring connections for specified hosts
-  wait_for:
+  ansible.builtin.wait_for:
     host: 0.0.0.0
     port: 8000
     state: drained
     exclude_hosts: 10.2.1.2,10.2.1.3
 
 - name: Wait until the file /tmp/foo is present before continuing
-  wait_for:
+  ansible.builtin.wait_for:
     path: /tmp/foo
 
 - name: Wait until the string "completed" is in the file /tmp/foo before continuing
-  wait_for:
+  ansible.builtin.wait_for:
     path: /tmp/foo
     search_regex: completed
 
 - name: Wait until regex pattern matches in the file /tmp/foo and print the matched group
-  wait_for:
+  ansible.builtin.wait_for:
     path: /tmp/foo
     search_regex: completed (?P<task>\w+)
   register: waitfor
-- debug:
+- ansible.builtin.debug:
     msg: Completed {{ waitfor['match_groupdict']['task'] }}
 
 - name: Wait until the lock file is removed
-  wait_for:
+  ansible.builtin.wait_for:
     path: /var/lock/file.lock
     state: absent
 
 - name: Wait until the process is finished and pid was destroyed
-  wait_for:
+  ansible.builtin.wait_for:
     path: /proc/3466/status
     state: absent
 
 - name: Output customized message when failed
-  wait_for:
+  ansible.builtin.wait_for:
     path: /tmp/foo
     state: present
     msg: Timeout to find file /tmp/foo
 
 # Do not assume the inventory_hostname is resolvable and delay 10 seconds at start
 - name: Wait 300 seconds for port 22 to become open and contain "OpenSSH"
-  wait_for:
+  ansible.builtin.wait_for:
     port: 22
     host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
     search_regex: OpenSSH
@@ -183,7 +192,7 @@ EXAMPLES = r'''
 
 # Same as above but you normally have ansible_connection set in inventory, which overrides 'connection'
 - name: Wait 300 seconds for port 22 to become open and contain "OpenSSH"
-  wait_for:
+  ansible.builtin.wait_for:
     port: 22
     host: '{{ (ansible_ssh_host|default(ansible_host))|default(inventory_hostname) }}'
     search_regex: OpenSSH
@@ -199,13 +208,13 @@ elapsed:
   type: int
   sample: 23
 match_groups:
-  description: Tuple containing all the subgroups of the match as returned by U(https://docs.python.org/2/library/re.html#re.MatchObject.groups)
+  description: Tuple containing all the subgroups of the match as returned by U(https://docs.python.org/3/library/re.html#re.MatchObject.groups)
   returned: always
   type: list
   sample: ['match 1', 'match 2']
 match_groupdict:
   description: Dictionary containing all the named subgroups of the match, keyed by the subgroup name,
-    as returned by U(https://docs.python.org/2/library/re.html#re.MatchObject.groupdict)
+    as returned by U(https://docs.python.org/3/library/re.html#re.MatchObject.groupdict)
   returned: always
   type: dict
   sample:
@@ -215,9 +224,11 @@ match_groupdict:
 '''
 
 import binascii
+import contextlib
 import datetime
 import errno
 import math
+import mmap
 import os
 import re
 import select
@@ -227,7 +238,8 @@ import traceback
 
 from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible.module_utils.common.sys_info import get_platform_subclass
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_bytes, to_native
+from ansible.module_utils.compat.datetime import utcnow
 
 
 HAS_PSUTIL = False
@@ -367,28 +379,33 @@ class LinuxTCPConnectionInfo(TCPConnectionInfo):
         for family in self.source_file.keys():
             if not os.path.isfile(self.source_file[family]):
                 continue
-            f = open(self.source_file[family])
-            for tcp_connection in f.readlines():
-                tcp_connection = tcp_connection.strip().split()
-                if tcp_connection[self.local_address_field] == 'local_address':
-                    continue
-                if (tcp_connection[self.connection_state_field] not in
-                        [get_connection_state_id(_connection_state) for _connection_state in self.module.params['active_connection_states']]):
-                    continue
-                (local_ip, local_port) = tcp_connection[self.local_address_field].split(':')
-                if self.port != local_port:
-                    continue
-                (remote_ip, remote_port) = tcp_connection[self.remote_address_field].split(':')
-                if (family, remote_ip) in self.exclude_ips:
-                    continue
-                if any((
-                    (family, local_ip) in self.ips,
-                    (family, self.match_all_ips[family]) in self.ips,
-                    local_ip.startswith(self.ipv4_mapped_ipv6_address['prefix']) and
-                        (family, self.ipv4_mapped_ipv6_address['match_all']) in self.ips,
-                )):
-                    active_connections += 1
-            f.close()
+            try:
+                f = open(self.source_file[family])
+                for tcp_connection in f.readlines():
+                    tcp_connection = tcp_connection.strip().split()
+                    if tcp_connection[self.local_address_field] == 'local_address':
+                        continue
+                    if (tcp_connection[self.connection_state_field] not in
+                            [get_connection_state_id(_connection_state) for _connection_state in self.module.params['active_connection_states']]):
+                        continue
+                    (local_ip, local_port) = tcp_connection[self.local_address_field].split(':')
+                    if self.port != local_port:
+                        continue
+                    (remote_ip, remote_port) = tcp_connection[self.remote_address_field].split(':')
+                    if (family, remote_ip) in self.exclude_ips:
+                        continue
+                    if any((
+                        (family, local_ip) in self.ips,
+                        (family, self.match_all_ips[family]) in self.ips,
+                        local_ip.startswith(self.ipv4_mapped_ipv6_address['prefix']) and
+                            (family, self.ipv4_mapped_ipv6_address['match_all']) in self.ips,
+                    )):
+                        active_connections += 1
+            except IOError as e:
+                pass
+            finally:
+                f.close()
+
         return active_connections
 
 
@@ -466,11 +483,11 @@ def main():
             connect_timeout=dict(type='int', default=5),
             delay=dict(type='int', default=0),
             port=dict(type='int'),
-            active_connection_states=dict(type='list', default=['ESTABLISHED', 'FIN_WAIT1', 'FIN_WAIT2', 'SYN_RECV', 'SYN_SENT', 'TIME_WAIT']),
+            active_connection_states=dict(type='list', elements='str', default=['ESTABLISHED', 'FIN_WAIT1', 'FIN_WAIT2', 'SYN_RECV', 'SYN_SENT', 'TIME_WAIT']),
             path=dict(type='path'),
             search_regex=dict(type='str'),
             state=dict(type='str', default='started', choices=['absent', 'drained', 'present', 'started', 'stopped']),
-            exclude_hosts=dict(type='list'),
+            exclude_hosts=dict(type='list', elements='str'),
             sleep=dict(type='int', default=1),
             msg=dict(type='str'),
         ),
@@ -482,14 +499,22 @@ def main():
     delay = module.params['delay']
     port = module.params['port']
     state = module.params['state']
+
     path = module.params['path']
+    b_path = to_bytes(path, errors='surrogate_or_strict', nonstring='passthru')
+
     search_regex = module.params['search_regex']
+    b_search_regex = to_bytes(search_regex, errors='surrogate_or_strict', nonstring='passthru')
+
     msg = module.params['msg']
 
     if search_regex is not None:
-        compiled_search_re = re.compile(search_regex, re.MULTILINE)
+        try:
+            b_compiled_search_re = re.compile(b_search_regex, re.MULTILINE)
+        except re.error as e:
+            module.fail_json(msg="Invalid regular expression: %s" % e)
     else:
-        compiled_search_re = None
+        b_compiled_search_re = None
 
     match_groupdict = {}
     match_groups = ()
@@ -508,7 +533,7 @@ def main():
         except Exception:
             module.fail_json(msg="unknown active_connection_state (%s) defined" % _connection_state, elapsed=0)
 
-    start = datetime.datetime.utcnow()
+    start = utcnow()
 
     if delay:
         time.sleep(delay)
@@ -519,10 +544,10 @@ def main():
         # first wait for the stop condition
         end = start + datetime.timedelta(seconds=timeout)
 
-        while datetime.datetime.utcnow() < end:
+        while utcnow() < end:
             if path:
                 try:
-                    if not os.access(path, os.F_OK):
+                    if not os.access(b_path, os.F_OK):
                         break
                 except IOError:
                     break
@@ -536,7 +561,7 @@ def main():
             # Conditions not yet met, wait and try again
             time.sleep(module.params['sleep'])
         else:
-            elapsed = datetime.datetime.utcnow() - start
+            elapsed = utcnow() - start
             if port:
                 module.fail_json(msg=msg or "Timeout when waiting for %s:%s to stop." % (host, port), elapsed=elapsed.seconds)
             elif path:
@@ -545,38 +570,49 @@ def main():
     elif state in ['started', 'present']:
         # wait for start condition
         end = start + datetime.timedelta(seconds=timeout)
-        while datetime.datetime.utcnow() < end:
+        while utcnow() < end:
             if path:
                 try:
-                    os.stat(path)
+                    os.stat(b_path)
                 except OSError as e:
                     # If anything except file not present, throw an error
                     if e.errno != 2:
-                        elapsed = datetime.datetime.utcnow() - start
+                        elapsed = utcnow() - start
                         module.fail_json(msg=msg or "Failed to stat %s, %s" % (path, e.strerror), elapsed=elapsed.seconds)
                     # file doesn't exist yet, so continue
                 else:
                     # File exists.  Are there additional things to check?
-                    if not compiled_search_re:
+                    if not b_compiled_search_re:
                         # nope, succeed!
                         break
-                    try:
-                        f = open(path)
-                        try:
-                            search = re.search(compiled_search_re, f.read())
-                            if search:
-                                if search.groupdict():
-                                    match_groupdict = search.groupdict()
-                                if search.groups():
-                                    match_groups = search.groups()
 
-                                break
-                        finally:
-                            f.close()
+                    try:
+                        with open(b_path, 'rb') as f:
+                            try:
+                                with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as mm:
+                                    search = b_compiled_search_re.search(mm)
+                                    if search:
+                                        if search.groupdict():
+                                            match_groupdict = search.groupdict()
+                                        if search.groups():
+                                            match_groups = search.groups()
+                                        break
+                            except (ValueError, OSError) as e:
+                                module.debug('wait_for failed to use mmap on "%s": %s. Falling back to file read().' % (path, to_native(e)))
+                                # cannot mmap this file, try normal read
+                                search = re.search(b_compiled_search_re, f.read())
+                                if search:
+                                    if search.groupdict():
+                                        match_groupdict = search.groupdict()
+                                    if search.groups():
+                                        match_groups = search.groups()
+                                    break
+                            except Exception as e:
+                                module.warn('wait_for failed on "%s", unexpected exception(%s): %s.).' % (path, to_native(e.__class__), to_native(e)))
                     except IOError:
                         pass
             elif port:
-                alt_connect_timeout = math.ceil(_timedelta_total_seconds(end - datetime.datetime.utcnow()))
+                alt_connect_timeout = math.ceil(_timedelta_total_seconds(end - utcnow()))
                 try:
                     s = socket.create_connection((host, port), min(connect_timeout, alt_connect_timeout))
                 except Exception:
@@ -584,12 +620,12 @@ def main():
                     pass
                 else:
                     # Connected -- are there additional conditions?
-                    if compiled_search_re:
-                        data = ''
+                    if b_compiled_search_re:
+                        b_data = b''
                         matched = False
-                        while datetime.datetime.utcnow() < end:
-                            max_timeout = math.ceil(_timedelta_total_seconds(end - datetime.datetime.utcnow()))
-                            (readable, w, e) = select.select([s], [], [], max_timeout)
+                        while utcnow() < end:
+                            max_timeout = math.ceil(_timedelta_total_seconds(end - utcnow()))
+                            readable = select.select([s], [], [], max_timeout)[0]
                             if not readable:
                                 # No new data.  Probably means our timeout
                                 # expired
@@ -598,8 +634,8 @@ def main():
                             if not response:
                                 # Server shutdown
                                 break
-                            data += to_native(response, errors='surrogate_or_strict')
-                            if re.search(compiled_search_re, data):
+                            b_data += response
+                            if b_compiled_search_re.search(b_data):
                                 matched = True
                                 break
 
@@ -632,7 +668,7 @@ def main():
 
         else:   # while-else
             # Timeout expired
-            elapsed = datetime.datetime.utcnow() - start
+            elapsed = utcnow() - start
             if port:
                 if search_regex:
                     module.fail_json(msg=msg or "Timeout when waiting for search string %s in %s:%s" % (search_regex, host, port), elapsed=elapsed.seconds)
@@ -648,19 +684,17 @@ def main():
         # wait until all active connections are gone
         end = start + datetime.timedelta(seconds=timeout)
         tcpconns = TCPConnectionInfo(module)
-        while datetime.datetime.utcnow() < end:
-            try:
-                if tcpconns.get_active_connections_count() == 0:
-                    break
-            except IOError:
-                pass
+        while utcnow() < end:
+            if tcpconns.get_active_connections_count() == 0:
+                break
+
             # Conditions not yet met, wait and try again
             time.sleep(module.params['sleep'])
         else:
-            elapsed = datetime.datetime.utcnow() - start
+            elapsed = utcnow() - start
             module.fail_json(msg=msg or "Timeout when waiting for %s:%s to drain" % (host, port), elapsed=elapsed.seconds)
 
-    elapsed = datetime.datetime.utcnow() - start
+    elapsed = utcnow() - start
     module.exit_json(state=state, port=port, search_regex=search_regex, match_groups=match_groups, match_groupdict=match_groupdict, path=path,
                      elapsed=elapsed.seconds)
 

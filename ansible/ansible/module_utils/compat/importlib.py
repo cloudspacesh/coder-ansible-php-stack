@@ -8,11 +8,11 @@ __metaclass__ = type
 import sys
 
 try:
-    from importlib import import_module
+    from importlib import import_module  # pylint: disable=unused-import
 except ImportError:
     # importlib.import_module returns the tail
     # whereas __import__ returns the head
     # compat to work like importlib.import_module
-    def import_module(name):
+    def import_module(name):  # type: ignore[misc]
         __import__(name)
         return sys.modules[name]

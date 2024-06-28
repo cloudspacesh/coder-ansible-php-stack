@@ -23,7 +23,7 @@ import codecs
 import re
 
 from ansible.errors import AnsibleParserError
-from ansible.module_utils._text import to_text
+from ansible.module_utils.common.text.converters import to_text
 from ansible.parsing.quoting import unquote
 
 
@@ -58,15 +58,7 @@ def parse_kv(args, check_raw=False):
 
     options = {}
     if args is not None:
-        try:
-            vargs = split_args(args)
-        except IndexError as e:
-            raise AnsibleParserError("Unable to parse argument string", orig_exc=e)
-        except ValueError as ve:
-            if 'no closing quotation' in str(ve).lower():
-                raise AnsibleParserError("error parsing argument string, try quoting the entire line.", orig_exc=ve)
-            else:
-                raise
+        vargs = split_args(args)
 
         raw_params = []
         for orig_x in vargs:
@@ -87,9 +79,8 @@ def parse_kv(args, check_raw=False):
                 k = x[:pos]
                 v = x[pos + 1:]
 
-                # FIXME: make the retrieval of this list of shell/command
-                #        options a function, so the list is centralized
-                if check_raw and k not in ('creates', 'removes', 'chdir', 'executable', 'warn'):
+                # FIXME: make the retrieval of this list of shell/command options a function, so the list is centralized
+                if check_raw and k not in ('creates', 'removes', 'chdir', 'executable', 'warn', 'stdin', 'stdin_add_newline', 'strip_empty_ends'):
                     raw_params.append(orig_x)
                 else:
                     options[k.strip()] = unquote(v.strip())
@@ -169,6 +160,9 @@ def split_args(args):
     how Ansible needs to use it.
     '''
 
+    if not args:
+        return []
+
     # the list of params parsed out of the arg string
     # this is going to be the result value when we are done
     params = []
@@ -205,6 +199,10 @@ def split_args(args):
             # Empty entries means we have subsequent spaces
             # We want to hold onto them so we can reconstruct them later
             if len(token) == 0 and idx != 0:
+                # Make sure there is a params item to store result in.
+                if not params:
+                    params.append('')
+
                 params[-1] += ' '
                 continue
 
@@ -230,19 +228,17 @@ def split_args(args):
             # to the end of the list, since we'll tack on more to it later
             # otherwise, if we're inside any jinja2 block, inside quotes, or we were
             # inside quotes (but aren't now) concat this token to the last param
-            if inside_quotes and not was_inside_quotes and not(print_depth or block_depth or comment_depth):
+            if inside_quotes and not was_inside_quotes and not (print_depth or block_depth or comment_depth):
                 params.append(token)
                 appended = True
             elif print_depth or block_depth or comment_depth or inside_quotes or was_inside_quotes:
                 if idx == 0 and was_inside_quotes:
                     params[-1] = "%s%s" % (params[-1], token)
-                elif len(tokens) > 1:
+                else:
                     spacer = ''
                     if idx > 0:
                         spacer = ' '
                     params[-1] = "%s%s%s" % (params[-1], spacer, token)
-                else:
-                    params[-1] = "%s\n%s" % (params[-1], token)
                 appended = True
 
             # if the number of paired block tags is not the same, the depth has changed, so we calculate that here
@@ -274,10 +270,11 @@ def split_args(args):
         # one item (meaning we split on newlines), add a newline back here
         # to preserve the original structure
         if len(items) > 1 and itemidx != len(items) - 1 and not line_continuation:
-            params[-1] += '\n'
+            # Make sure there is a params item to store result in.
+            if not params:
+                params.append('')
 
-        # always clear the line continuation flag
-        line_continuation = False
+            params[-1] += '\n'
 
     # If we're done and things are not at zero depth or we're still inside quotes,
     # raise an error to indicate that the args were unbalanced

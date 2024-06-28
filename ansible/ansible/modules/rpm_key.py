@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # Ansible module to import third party repo keys to your rpm db
@@ -24,15 +23,17 @@ options:
       description:
         - Key that will be modified. Can be a url, a file on the managed node, or a keyid if the key
           already exists in the database.
+      type: str
       required: true
     state:
       description:
         - If the key will be imported or removed from the rpm db.
+      type: str
       default: present
       choices: [ absent, present ]
     validate_certs:
       description:
-        - If C(no) and the C(key) is a url starting with https, SSL certificates will not be validated.
+        - If V(false) and the O(key) is a url starting with V(https), SSL certificates will not be validated.
         - This should only be used on personally controlled sites using self-signed certificates.
       type: bool
       default: 'yes'
@@ -42,8 +43,15 @@ options:
         - This will be used to verify the specified key.
       type: str
       version_added: 2.9
-notes:
-  - Supports C(check_mode).
+extends_documentation_fragment:
+    - action_common_attributes
+attributes:
+    check_mode:
+        support: full
+    diff_mode:
+        support: none
+    platform:
+        platforms: rhel
 '''
 
 EXAMPLES = '''
@@ -77,7 +85,7 @@ import tempfile
 # import module snippets
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url
-from ansible.module_utils._text import to_native
+from ansible.module_utils.common.text.converters import to_native
 
 
 def is_pubkey(string):
@@ -231,7 +239,7 @@ def main():
     module = AnsibleModule(
         argument_spec=dict(
             state=dict(type='str', default='present', choices=['absent', 'present']),
-            key=dict(type='str', required=True),
+            key=dict(type='str', required=True, no_log=False),
             fingerprint=dict(type='str'),
             validate_certs=dict(type='bool', default=True),
         ),

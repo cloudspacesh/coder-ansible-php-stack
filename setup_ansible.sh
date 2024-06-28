@@ -2,7 +2,8 @@
 set -e
 pushd `dirname $0` > /dev/null;DIR=`pwd -P`;popd > /dev/null
 cd ${DIR}
-wget -O ${DIR}/portable-ansible.tar.bz2 https://github.com/ownport/portable-ansible/releases/download/v0.5.0/portable-ansible-v0.5.0-py3.tar.bz2
+#wget -O ${DIR}/portable-ansible.tar.bz2 https://github.com/ownport/portable-ansible/releases/download/v0.5.0/portable-ansible-v0.5.0-py3.tar.bz2
+wget -O ${DIR}/portable-ansible.tar.bz2 https://github.com/lob19/portable-ansible/releases/download/v0.5.1/portable-ansible-v0.5.1-py3.tar.bz2
 rm -rf ansible
 rm -rf ansible-galaxy
 rm -rf ansible-playbook
