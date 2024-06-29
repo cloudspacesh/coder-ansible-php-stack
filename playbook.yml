@@ -59,7 +59,7 @@
 
     - name: Ensure homebrew_prefix
       ansible.builtin.set_fact:
-        homebrew_prefix: "/opt/prefix"
+        homebrew_prefix: "/opt/homebrew"
       when: "ansible_system == 'Darwin' and ansible_architecture == 'arm64'"
       tags:
         - always
@@ -248,7 +248,17 @@
         chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
       become: yes
       become_user: "{{ developer_username }}"
-      when: stat_etc_digitalspace_supervisor_d.stat.exists
+      when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system == 'Linux'
+      tags:
+        - always
+
+    - name: "Remove another php versions from supervisor"
+      shell:
+        cmd: "ls | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" | xargs -I{} rm {}"
+        chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system != 'Linux'
       tags:
         - always
 
