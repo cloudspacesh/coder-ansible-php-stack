@@ -53,9 +53,11 @@
   when: developer_password_hash != ""
 
 - name: "Ensure ownerships"
-  file:
-    dest: "{{ developer_user_info.home }}"
-    owner: "{{ developer_username }}"
-    recurse: true
-    follow: false
+  command: "chown -R {{ developer_username }} '{{ developer_user_info.home }}'"
+  changed_when: false
+  # file:
+  #   dest: "{{ developer_user_info.home }}"
+  #   owner: "{{ developer_username }}"
+  #   recurse: true
+  #   follow: false
   when: developer_user_info.home is regex('^/home/.*')

@@ -11,49 +11,47 @@
 
 - name: Check if .oh-my-zsh exists
   stat:
-    path: /root/.oh-my-zsh
+    path: "/root/.oh-my-zsh/"
+  register: stat_oh_my_zsh_result_basedir
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: Check if .oh-my-zsh/.git exists
+  stat:
+    path: "/root/.oh-my-zsh/.git"
   register: stat_oh_my_zsh_result
   when: "ansible_system == 'Linux'"
   become: true
 
-# - name: Cloning oh-my-zsh repo
-#   git:
-#     repo: https://github.com/robbyrussell/oh-my-zsh
-#     dest: /tmp/.oh-my-zsh
-
-- name: Download oh-my-zsh repo
-  get_url:
-    url: "https://github.com/robbyrussell/oh-my-zsh/archive/refs/heads/master.tar.gz"
-    dest: "/tmp/oh-my-zsh.tar.gz"
-
-- name: "Ensure dir /root/.oh-my-zsh"
-  file:
+- name: Remove /root/.oh-my-zsh
+  ansible.builtin.file:
     path: "/root/.oh-my-zsh"
-    state: directory
+    state: absent
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
   become: true
-  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists
 
-- name: Ensure /root/.oh-my-zsh
-  unarchive:
-    src:  "/tmp/oh-my-zsh.tar.gz"
+- name: "Clone ohmyzsh to /root/.oh-my-zsh"
+  git:
+    repo: 'https://github.com/ohmyzsh/ohmyzsh.git'
     dest: "/root/.oh-my-zsh"
-    extra_opts: [--strip-components=1]
+    version: master
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
   become: true
-  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists
 
 - name: Creating new /root/.zshrc
   copy:
     src: /root/.oh-my-zsh/templates/zshrc.zsh-template
     dest: /root/.zshrc
     remote_src: yes
-  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists
+  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result_basedir.stat.exists
+  become: true
 
 - name: "Configure theme hostname"
   shell: echo $(hostname -s) > /root/.box-name
   args:
     executable: /bin/bash
+  when: ansible_system == 'Linux'
   become: true
-  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists
 
 - name: "Configure theme"
   lineinfile:
@@ -83,38 +81,42 @@
     developer_user_home: "/Users/{{ developer_username }}"
   when: "ansible_system == 'Darwin'"
 
-
 - name: "Check if .oh-my-zsh exists"
   stat: 
     path: "{{ developer_user_home }}/.oh-my-zsh"
+  register: stat_oh_my_zsh_result_basedir
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: "Check if .oh-my-zsh/.git exists"
+  stat: 
+    path: "{{ developer_user_home }}/.oh-my-zsh/.git"
   register: stat_oh_my_zsh_result
   become: true
   become_user: "{{ developer_username }}"
   when: developer_username is defined
 
-- name: "Ensure dir {{ developer_user_home }}/.oh-my-zsh"
-  file:
-    path: "{{ developer_user_home }}/.oh-my-zsh"
-    state: directory
+- name: Remove {{ developer_user_home }}/.oh-my-zsh/
+  ansible.builtin.file:
+    path: "{{ developer_user_home }}/.oh-my-zsh/"
+    state: absent
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
   become: true
-  become_user: "{{ developer_username }}"
 
-- name: "Ensure {{ developer_user_home }}/.oh-my-zsh"
-  unarchive:
-    src:  "/tmp/oh-my-zsh.tar.gz"
-    dest: "{{ developer_user_home}}/.oh-my-zsh"
-    owner: "{{ developer_username }}"
-    extra_opts: [--strip-components=1]
-  when: not stat_oh_my_zsh_result.stat.exists and developer_username is defined
-  become: true
-  become_user: "{{ developer_username }}"
+- name: "Clone ohmyzsh to {{ developer_user_home }}/.oh-my-zsh"
+  git:
+    repo: 'https://github.com/ohmyzsh/ohmyzsh.git'
+    dest: "{{ developer_user_home }}/.oh-my-zsh"
+    version: master
+  when: "developer_username is defined and not stat_oh_my_zsh_result.stat.exists"
 
 - name: Creating new {{ developer_user_home }}/.zshrc
   copy:
     src: "{{ developer_user_home }}/.oh-my-zsh/templates/zshrc.zsh-template"
     dest: "{{ developer_user_home }}/.zshrc"
     remote_src: yes
-  when: not stat_oh_my_zsh_result.stat.exists and developer_username is defined
+  when: not stat_oh_my_zsh_result_basedir.stat.exists and developer_username is defined
   become: true
   become_user: "{{ developer_username }}"
 
@@ -124,7 +126,7 @@
     executable: /bin/bash
   become: true
   become_user: "{{ developer_username }}"
-  when: not stat_oh_my_zsh_result.stat.exists and developer_username is defined
+  when: developer_username is defined
 
 - name: "Configure theme for {{ developer_username }}"
   lineinfile:
@@ -134,9 +136,4 @@
     line: 'ZSH_THEME="fino-time"'
   become: true
   become_user: "{{ developer_username }}"
-  when: not stat_oh_my_zsh_result.stat.exists and developer_username is defined
-
-- name: Cleanup
-  ansible.builtin.file:
-    path: /tmp/oh-my-zsh.tar.gz
-    state: absent
+  when: developer_username is defined

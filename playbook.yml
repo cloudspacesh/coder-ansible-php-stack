@@ -64,6 +64,11 @@
       tags:
         - always
 
+    - debug:
+        msg: "homebrew_prefix: {{ homebrew_prefix }}"
+      tags:
+        - always
+
     - name: "Stopping digitalspace-supervisor"
       shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop || /bin/true || /usr/bin/true'
       become: true
@@ -77,11 +82,13 @@
     #     - debug_info
 
     - role: roles/system-base
+      become: yes
       when: "ansible_system == 'Linux'"
       tags:
         - base-system
 
     - role: roles/user-developer
+      become: yes
       when: "ansible_system == 'Linux'"
       tags:
         - base-system
