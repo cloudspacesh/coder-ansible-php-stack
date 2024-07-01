@@ -66,5 +66,3 @@ fedora_packages:
   - tmpwatch
   - net-tools
 
-pip_packages:
-  - jmespath

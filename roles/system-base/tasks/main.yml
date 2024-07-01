@@ -23,13 +23,8 @@
   package:
     name: "{{ fedora_packages }}"
     state: present
+    skip_broken: true
   when: "ansible_system == 'Linux' and distro_id == 'fedora'"
-
-- name: Ensure pip packages
-  pip:
-    name: "{{ pip_packages }}"
-    state: present
-  when: "ansible_system == 'Linux'"
 
 - stat:
     path: "/etc/ssh/sshd_config"
