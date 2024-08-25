@@ -227,7 +227,7 @@
 
   post_tasks:
     - name: "Determine outdated php versions"
-    - shell: "echo $({{ homebrew_prefix }}/bin/brew list | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" || /bin/true || /usr/bin/true)"
+      shell: "echo $({{ homebrew_prefix }}/bin/brew list | grep 'php[0-9]\\+' | grep -v \"{{ php_versions | join('\\|') }}\" || /bin/true || /usr/bin/true)"
       register: brew_list_php
       become: yes
       become_user: "{{ developer_username }}"
