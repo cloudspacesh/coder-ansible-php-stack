@@ -87,6 +87,15 @@
   become: true
   become_user: "{{ developer_username }}"
 
+- name: "Upgrading brew"
+  command: "{{ homebrew_prefix }}/bin/brew upgrade"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'FALSE'
+    HOMEBREW_NO_AUTO_UPDATE: 'FALSE'
+  become: true
+  become_user: "{{ developer_username }}"
+
 - name: Reconfigure already installed formulas
   shell: |
     {{ homebrew_prefix }}/bin/brew postinstall $({{ homebrew_prefix }}/bin/brew list --full-name | grep digitalspacestdio) > /dev/null 2> /dev/null
