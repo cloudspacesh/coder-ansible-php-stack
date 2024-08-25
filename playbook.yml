@@ -288,7 +288,7 @@
       when: developer_username is defined
 
     - name: "Starting digitalspace-supervisor"
-      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/.linuxbrew/bin/digitalspace-supervisor-start'
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-start'
       become: true
       become_user: "root"
       ignore_errors: True
