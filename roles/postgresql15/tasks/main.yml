@@ -5,7 +5,7 @@
     state: "present"
     path: "/home/linuxbrew/.linuxbrew/bin"
   with_items:
-    - "digitalspacestdio/nextgen-devenv"
+    - "digitalspacestdio/ngdev"
 
 - name: "Ensure postgresql15"
   homebrew:
