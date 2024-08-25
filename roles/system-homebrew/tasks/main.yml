@@ -137,7 +137,7 @@
   register: brew_list_output
 
 - name: "Reconfigure already installed formulas"
-  command: "{{ homebrew_prefix }}/bin/brew postinstall"
+  command: "{{ homebrew_prefix }}/bin/brew postinstall {{ item }}"
   environment:
     NONINTERACTIVE: 'TRUE'
     HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
