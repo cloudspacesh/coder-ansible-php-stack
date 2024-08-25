@@ -87,6 +87,16 @@
   become: true
   become_user: "{{ developer_username }}"
 
+- name: "Re-tap all taps"
+  command: "{{ homebrew_prefix }}/bin/brew tap | xargs -I{} bash -c '{{ homebrew_prefix }}/bin/brew untap -f {}; {{ homebrew_prefix }}/bin/brew tap {}'"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
+    HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
+  become: true
+  become_user: "{{ developer_username }}"
+  ignore_errors: True
+
 - name: "Upgrading brew"
   command: "{{ homebrew_prefix }}/bin/brew upgrade"
   environment:
