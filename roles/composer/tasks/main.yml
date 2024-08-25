@@ -3,6 +3,39 @@
   homebrew_tap: "tap={{ item }} state=present"
   with_items:
   - "digitalspacestdio/php"
+  tags:
+    - composer@2.8
+    - composer@2.7
+    - composer@2.6
+    - composer@2.4
+    - composer@2.2
+    - composer@1.10
+
+- name: "Ensure digitalspacestdio/php/composer@2.8"
+  homebrew:
+    name: "digitalspacestdio/php/composer@2.8"
+    state: latest
+  tags:
+    - composer@2.8
+
+- name: "Adding 'composer@2.8' to 'composer_versions' array"
+  set_fact:
+    composer_versions: "{{ composer_versions + [ 'composer@2.8' ] }}"
+  tags:
+    - composer@2.8
+
+- name: "Ensure digitalspacestdio/php/composer@2.7"
+  homebrew:
+    name: "digitalspacestdio/php/composer@2.7"
+    state: latest
+  tags:
+    - composer@2.7
+
+- name: "Adding 'composer@2.7' to 'composer_versions' array"
+  set_fact:
+    composer_versions: "{{ composer_versions + [ 'composer@2.7' ] }}"
+  tags:
+    - composer@2.7
 
 - name: "Ensure digitalspacestdio/php/composer@2.6"
   homebrew:
