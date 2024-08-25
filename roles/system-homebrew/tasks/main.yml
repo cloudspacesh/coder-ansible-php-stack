@@ -87,15 +87,35 @@
   become: true
   become_user: "{{ developer_username }}"
 
-- name: "Re-tap all taps"
-  command: "{{ homebrew_prefix }}/bin/brew tap | xargs $(if [[ \"$OSTYPE\" != \"darwin\"* ]]; then printf -- '--no-run-if-empty'; fi;) -I{} bash -c '{{ homebrew_prefix }}/bin/brew untap -f {}; {{ homebrew_prefix }}/bin/brew tap {}'"
+- name: "Get current taps"
+  command: "{{ homebrew_prefix }}/bin/brew tap"
   environment:
     NONINTERACTIVE: 'TRUE'
     HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
     HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
   become: true
   become_user: "{{ developer_username }}"
-  ignore_errors: True
+  register: brew_tap_output
+
+- name: "Untap {{ item }}"
+  command: "{{ homebrew_prefix }}/bin/brew untap -f {{ item }}"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
+    HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
+  become: true
+  become_user: "{{ developer_username }}"
+  loop: "{{ brew_tap_output.stdout.splitlines() }}"
+
+- name: "Tap {{ item }}"
+  command: "{{ homebrew_prefix }}/bin/brew tap {{ item }}"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
+    HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
+  become: true
+  become_user: "{{ developer_username }}"
+  loop: "{{ brew_tap_output.stdout.splitlines() }}"
 
 - name: "Upgrading brew"
   command: "{{ homebrew_prefix }}/bin/brew upgrade"
