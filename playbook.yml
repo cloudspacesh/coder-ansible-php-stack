@@ -197,6 +197,13 @@
       when: developer_username is defined
       tags:
         - php83
+
+    - role: roles/php84
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: developer_username is defined
+      tags:
+        - php84
     
     - role: roles/phpNone
       become: yes
