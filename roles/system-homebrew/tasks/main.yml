@@ -88,7 +88,7 @@
   become_user: "{{ developer_username }}"
 
 - name: "Re-tap all taps"
-  command: "{{ homebrew_prefix }}/bin/brew tap | xargs -I{} bash -c '{{ homebrew_prefix }}/bin/brew untap -f {}; {{ homebrew_prefix }}/bin/brew tap {}'"
+  command: "{{ homebrew_prefix }}/bin/brew tap | xargs $(if [[ \"$OSTYPE\" != \"darwin\"* ]]; then printf -- '--no-run-if-empty'; fi;) -I{} bash -c '{{ homebrew_prefix }}/bin/brew untap -f {}; {{ homebrew_prefix }}/bin/brew tap {}'"
   environment:
     NONINTERACTIVE: 'TRUE'
     HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
