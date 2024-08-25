@@ -25,11 +25,12 @@ else
   . /etc/os-release
   DISTRO=${ID_LIKE:-$ID}
   if [[ "debian" == $DISTRO ]]; then
-    apt --fix-broken install
-    which envsubst > /dev/null || apt update -qy && apt install -qy gettext
-    which pip3 > /dev/null || apt update -qy && apt install -qy python3-pip
-    which python3 > /dev/null || apt update -qy && apt install -qy python3
-    which ansible-playbook > /dev/null || apt update -qy && apt install -qy ansible
+    apt update -qy
+    apt --fix-broken --fix-missing install
+    which envsubst > /dev/null || apt install -qy gettext
+    which pip3 > /dev/null || apt install -qy python3-pip
+    which python3 > /dev/null || apt install -qy python3
+    which ansible-playbook > /dev/null || apt install -qy ansible
   elif [[ "fedora" == $DISTRO ]]; then
     which envsubst > /dev/null || dnf install -qy gettext
     which pip3 > /dev/null || dnf install -qy python3-pip
