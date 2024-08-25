@@ -127,7 +127,7 @@
   become_user: "{{ developer_username }}"
 
 - name: "Get already installed formulas"
-  shell: "{{ homebrew_prefix }}/bin/brew list --full-name | grep digitalspacestdio || /usr/bin/true || /bin/true"
+  shell: "{{ homebrew_prefix }}/bin/brew list --full-name | grep digitalspacestdio || true"
   environment:
     NONINTERACTIVE: 'TRUE'
     HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
