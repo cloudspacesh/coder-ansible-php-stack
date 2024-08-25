@@ -19,7 +19,11 @@
     password: "{{ developer_password_hash }}"
   when: developer_password_hash != ""
 
-- include: "{{ distro_id }}.yml"
+- include_tasks: "fedora.yml"
+  when: "ansible_system == 'Linux' and distro_id == 'fedora'"
+
+- include_tasks: "debian.yml"
+  when: "ansible_system == 'Linux' and distro_id == 'debian'"
 
 - name: "Set developer_username to exist user"
   set_fact:
