@@ -271,13 +271,6 @@
       tags:
         - always
 
-    - name: "Starting digitalspace-supervisor"
-      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/.linuxbrew/bin/digitalspace-supervisor-start || /bin/true || /usr/bin/true'
-      become: true
-      become_user: "root"
-      tags:
-        - always
-
     - name: "Changing default shell to zsh"
       shell: 'chsh -s $(which zsh)'
       become: true
@@ -293,3 +286,11 @@
       tags:
         - zsh
       when: developer_username is defined
+
+    - name: "Starting digitalspace-supervisor"
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/.linuxbrew/bin/digitalspace-supervisor-start'
+      become: true
+      become_user: "root"
+      ignore_errors: True
+      tags:
+        - always
