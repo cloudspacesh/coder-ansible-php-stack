@@ -1,0 +1,68 @@
+---
+pup_version: "v0.4.0"
+debian_packages:
+  - software-properties-common 
+  - python3-setuptools
+  - python3-pip
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - wget
+  - git-core
+  - htop
+  - iftop
+  - nload
+  - sudo
+  - vim
+  - mysql-client
+  - postgresql-client
+  - patch
+  - rsync
+  - ntp
+  - make
+  - build-essential
+  - systemtap-sdt-dev
+  - procps
+  - zip
+  - unzip
+  - netcat-openbsd
+  - jq
+  - pv
+  - screen
+  - tmux
+  - tmpreaper
+  - net-tools
+
+fedora_packages:
+  - make
+  - automake
+  - gcc
+  - gcc-c++
+  - kernel-devel
+  - perl
+  - python3-pip
+  - ca-certificates
+  - curl
+  - wget
+  - git-core
+  - htop
+  - iftop
+  - nload
+  - sudo
+  - vim
+  - community-mysql
+  - postgresql
+  - patch
+  - rsync
+  - chrony
+  - systemtap-sdt-devel
+  - procps
+  - zip
+  - unzip
+  - jq
+  - pv
+  - screen
+  - tmux
+  - tmpwatch
+  - net-tools
+

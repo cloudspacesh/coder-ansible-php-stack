@@ -1,0 +1,7 @@
+---
+php_version: php82
+php_version_num: "8.2"
+php_flags: ""
+php_dependencies:
+php_modules: [ "php82-common" ]
+php_pear_packages: []

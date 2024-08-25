@@ -1,0 +1,7 @@
+---
+php_version: php72
+php_version_num: "7.2"
+php_flags: ""
+php_dependencies:
+php_modules: [ "php72-common" ]
+php_pear_packages: []

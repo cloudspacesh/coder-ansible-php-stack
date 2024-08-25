@@ -1,0 +1,139 @@
+---
+- name: Ensure ZSH,GIT packages
+  package: 
+    name: 
+      - zsh
+      - git-core
+    state: present
+  register: installation
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: Check if .oh-my-zsh exists
+  stat:
+    path: "/root/.oh-my-zsh/"
+  register: stat_oh_my_zsh_result_basedir
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: Check if .oh-my-zsh/.git exists
+  stat:
+    path: "/root/.oh-my-zsh/.git"
+  register: stat_oh_my_zsh_result
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: Remove /root/.oh-my-zsh
+  ansible.builtin.file:
+    path: "/root/.oh-my-zsh"
+    state: absent
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
+  become: true
+
+- name: "Clone ohmyzsh to /root/.oh-my-zsh"
+  git:
+    repo: 'https://github.com/ohmyzsh/ohmyzsh.git'
+    dest: "/root/.oh-my-zsh"
+    version: master
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
+  become: true
+
+- name: Creating new /root/.zshrc
+  copy:
+    src: /root/.oh-my-zsh/templates/zshrc.zsh-template
+    dest: /root/.zshrc
+    remote_src: yes
+  when: ansible_system == 'Linux' and not stat_oh_my_zsh_result_basedir.stat.exists
+  become: true
+
+- name: "Configure theme hostname"
+  shell: echo $(hostname -s) > /root/.box-name
+  args:
+    executable: /bin/bash
+  when: ansible_system == 'Linux'
+  become: true
+
+- name: "Configure theme"
+  lineinfile:
+    dest: /root/.zshrc
+    state: present
+    regexp: '^ZSH_THEME='
+    line: 'ZSH_THEME="fino-time"'
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: "Enable oh-my-zsh update"
+  lineinfile:
+    dest: /root/.zshrc
+    state: present
+    regexp: "^zstyle ':omz:update'"
+    line: "zstyle ':omz:update' mode auto"
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: Userhome
+  ansible.builtin.set_fact:
+    developer_user_home: "/home/{{ developer_username }}"
+  when: "ansible_system == 'Linux'"
+
+- name: Userhome
+  ansible.builtin.set_fact:
+    developer_user_home: "/Users/{{ developer_username }}"
+  when: "ansible_system == 'Darwin'"
+
+- name: "Check if .oh-my-zsh exists"
+  stat: 
+    path: "{{ developer_user_home }}/.oh-my-zsh"
+  register: stat_oh_my_zsh_result_basedir
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: "Check if .oh-my-zsh/.git exists"
+  stat: 
+    path: "{{ developer_user_home }}/.oh-my-zsh/.git"
+  register: stat_oh_my_zsh_result
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: Remove {{ developer_user_home }}/.oh-my-zsh/
+  ansible.builtin.file:
+    path: "{{ developer_user_home }}/.oh-my-zsh/"
+    state: absent
+  when: "ansible_system == 'Linux' and not stat_oh_my_zsh_result.stat.exists"
+  become: true
+
+- name: "Clone ohmyzsh to {{ developer_user_home }}/.oh-my-zsh"
+  git:
+    repo: 'https://github.com/ohmyzsh/ohmyzsh.git'
+    dest: "{{ developer_user_home }}/.oh-my-zsh"
+    version: master
+  when: "developer_username is defined and not stat_oh_my_zsh_result.stat.exists"
+
+- name: Creating new {{ developer_user_home }}/.zshrc
+  copy:
+    src: "{{ developer_user_home }}/.oh-my-zsh/templates/zshrc.zsh-template"
+    dest: "{{ developer_user_home }}/.zshrc"
+    remote_src: yes
+  when: not stat_oh_my_zsh_result_basedir.stat.exists and developer_username is defined
+  become: true
+  become_user: "{{ developer_username }}"
+
+- name: "Configure theme hostname for{{ developer_username }}"
+  shell: echo $(hostname -s) > /{{ developer_user_home }}/.box-name
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: "Configure theme for {{ developer_username }}"
+  lineinfile:
+    dest: "{{ developer_user_home }}/.zshrc"
+    state: present
+    regexp: '^ZSH_THEME='
+    line: 'ZSH_THEME="fino-time"'
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined

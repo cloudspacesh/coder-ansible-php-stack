@@ -1,0 +1,7 @@
+---
+php_version: php81
+php_version_num: "8.1"
+php_flags: ""
+php_dependencies:
+php_modules: [ "php81-common" ]
+php_pear_packages: []
