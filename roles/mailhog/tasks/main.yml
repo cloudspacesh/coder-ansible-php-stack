@@ -5,7 +5,9 @@
     state: "present"
     path: "{{ homebrew_prefix }}/bin"
   with_items:
-  - "digitalspacestdio/ngdev"
+    - "digitalspacestdio/ngdev"
+  tags:
+    - mailhog
 
 - name: "Ensure mailhog"
   homebrew:
