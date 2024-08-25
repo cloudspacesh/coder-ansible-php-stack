@@ -116,6 +116,7 @@
         - php81
         - php82
         - php83
+        - php84
         - mailhog
         - postgresql15
         - mysql80
@@ -134,6 +135,7 @@
         - php81
         - php82
         - php83
+        - php84
 
     - role: roles/php70
       become: yes
