@@ -41,6 +41,9 @@
   register: developer_user_info
   when: "ansible_system == 'Linux' and distro_id == 'fedora'"
 
+- name: debug
+  debug: msg="user {{ developer_user_info}}"
+
 - name: "Set developer_username to exist user"
   set_fact:
     developer_username: "{{ developer_user_info.name }}"
