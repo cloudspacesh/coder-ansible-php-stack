@@ -8,57 +8,26 @@
     state: present
   when: unix_user_developer.stdout != "" and unix_user_developer.stdout != developer_username
 
-# - name: Move home directory
-#   user:
-#     name: "{{ unix_user_developer.stdout }}"
-#     home: "/home/{{ developer_username }}"
-# #    move_home: yes
-#   when: unix_user_developer.stdout != "" and unix_user_developer.stdout != developer_username
-
 - name: "Rename user {{ unix_user_developer.stdout  }} --> {{ developer_username }}"
   command: "usermod --login {{ developer_username }} {{ unix_user_developer.stdout }}"
   when: unix_user_developer.stdout != "" and unix_user_developer.stdout != developer_username
 
-- name: "Fedora Add the user '{{ developer_username }}' with the {{ developer_uid }} uid and a primary group of '{{ developer_username }}'"
-  user:
-    comment: Workspace Owner
-    name: "{{ developer_username }}"
-    uid: "{{ developer_uid }}"
-    groups: [wheel]
-    append: true
-    shell: /bin/bash
-  register: developer_user_info_fedora
-  when: "ansible_system == 'Linux' and distro_id == 'fedora'"
-
-- name: "Debian: Add the user '{{ developer_username }}' with the {{ developer_uid }} uid and a primary group of '{{ developer_username }}'"
-  user:
-    comment: Workspace Owner
-    name: "{{ developer_username }}"
-    uid: "{{ developer_uid }}"
-    groups: [sudo]
-    append: true
-    shell: /bin/bash
-  register: developer_user_info_debian
-  when: "ansible_system == 'Linux' and distro_id == 'debian'"
-
-- name: "Fedora: Set developer_username to exist user"
-  set_fact:
-    developer_username: "{{ developer_user_info_fedora.name }}"
-  when: "ansible_system == 'Linux' and distro_id == 'fedora'"
-
-- name: "Debian: Set developer_username to exist user"
-  set_fact:
-    developer_username: "{{ developer_user_info_debian.name }}"
-  when: "ansible_system == 'Linux' and distro_id == 'debian'"
-
-- name: Change user password hash
+- name: "Change user password hash"
   user:
     name: '{{ developer_username }}'
     update_password: always
     password: "{{ developer_password_hash }}"
   when: developer_password_hash != ""
 
+- include: "{{ distro_id }}.yml"
+
+- name: "Set developer_username to exist user"
+  set_fact:
+    developer_username: "{{ developer_user_info.name }}"
+  when: "ansible_system == 'Linux'"
+
 - name: "Ensure ownerships"
   command: "chown -R {{ developer_username }} '{{ developer_user_info.home }}'"
   changed_when: false
-  when: developer_user_info.home is regex('^/home/.*')
+  when: "ansible_system == 'Linux' and developer_user_info.home is regex('^/home/.*')"
+

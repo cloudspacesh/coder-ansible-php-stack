@@ -1,0 +1,11 @@
+---
+- name: "Add the user '{{ developer_username }}' with the {{ developer_uid }} uid and a primary group of '{{ developer_username }}'"
+  user:
+    comment: Workspace Owner
+    name: "{{ developer_username }}"
+    uid: "{{ developer_uid }}"
+    groups: [wheel]
+    append: true
+    shell: /bin/bash
+  register: developer_user_info
+  when: "ansible_system == 'Linux'"
