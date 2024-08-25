@@ -97,7 +97,7 @@
   become_user: "{{ developer_username }}"
   register: brew_tap_output
 
-- name: "Untap {{ item }}"
+- name: "Untap"
   command: "{{ homebrew_prefix }}/bin/brew untap -f {{ item }}"
   environment:
     NONINTERACTIVE: 'TRUE'
@@ -107,7 +107,7 @@
   become_user: "{{ developer_username }}"
   loop: "{{ brew_tap_output.stdout.splitlines() }}"
 
-- name: "Tap {{ item }}"
+- name: "Tap"
   command: "{{ homebrew_prefix }}/bin/brew tap {{ item }}"
   environment:
     NONINTERACTIVE: 'TRUE'
@@ -126,12 +126,25 @@
   become: true
   become_user: "{{ developer_username }}"
 
-- name: Reconfigure already installed formulas
-  shell: |
-    {{ homebrew_prefix }}/bin/brew postinstall $({{ homebrew_prefix }}/bin/brew list --full-name | grep digitalspacestdio) > /dev/null 2> /dev/null
+- name: "Get already installed formulas"
+  command: "{{ homebrew_prefix }}/bin/brew list --full-name | grep digitalspacestdio"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
+    HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
   become: true
   become_user: "{{ developer_username }}"
-  when: stat_homebrew_prefix.stat.exists
+  register: brew_list_output
+
+- name: "Reconfigure already installed formulas"
+  command: "{{ homebrew_prefix }}/bin/brew postinstall"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+    HOMEBREW_NO_INSTALL_CLEANUP: 'TRUE'
+    HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
+  become: true
+  become_user: "{{ developer_username }}"
+  loop: "{{ brew_list_output.stdout.splitlines() }}"
 
 - name: "Ensure nvm"
   command: "{{ homebrew_prefix }}/bin/brew install nvm"
