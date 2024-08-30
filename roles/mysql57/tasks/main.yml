@@ -1,0 +1,37 @@
+---
+- name: Ensure that taps are tapped.
+  homebrew_tap: 
+    tap: "{{ item }}"
+    state: "present"
+    path: "/home/linuxbrew/.linuxbrew/bin"
+  with_items:
+  - "digitalspacestdio/ngdev"
+
+- name: "Ensure mysql57"
+  homebrew:
+    name: "digitalspace-mysql57"
+    state: latest
+  tags:
+    - mysql57
+
+- name: "Adding 'mysql57' to 'mysql_versions' array"
+  set_fact:
+    mysql_versions: "{{ mysql_versions + [ 'mysql57' ] }}"
+  tags:
+    - mysql57
+
+- name: "Remove mysql57"
+  homebrew:
+    name: "digitalspace-mysql57"
+    state: absent
+  when: "mysql_versions is not defined or mysql_versions | length < 1"
+  tags:
+    - mysqlNone
+
+- name: "Remove mysql57 from supervisor"
+  shell: 
+    cmd: "ls | grep 'mysql57' | xargs --no-run-if-empty -I{} rm {}"
+    chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
+  when: "mysql_versions is not defined or mysql_versions | length < 1"
+  tags:
+    - mysqlNone
