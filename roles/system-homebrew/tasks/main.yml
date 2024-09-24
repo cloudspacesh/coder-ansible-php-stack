@@ -78,6 +78,13 @@
       eval "$({{ homebrew_prefix }}/bin/brew shellenv)"
   with_items: ['.zprofile', '.profile']
 
+- name: "Brew cleanup"
+  command: "{{ homebrew_prefix }}/bin/brew cleanup --prune=all"
+  environment:
+    NONINTERACTIVE: 'TRUE'
+  become: true
+  become_user: "{{ developer_username }}"
+
 - name: "Updating brew"
   command: "{{ homebrew_prefix }}/bin/brew update"
   environment:
