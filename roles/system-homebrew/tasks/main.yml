@@ -100,6 +100,7 @@
   become: true
   become_user: "{{ developer_username }}"
   when: stat_homebrew_prefix.stat.exists
+  ignore_errors: true
 
 - name: "Ensure nvm"
   command: "{{ homebrew_prefix }}/bin/brew install nvm"
