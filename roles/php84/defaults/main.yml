@@ -1,0 +1,7 @@
+---
+php_version: php84
+php_version_num: "8.4"
+php_flags: ""
+php_dependencies:
+php_modules: [ "php84-common" ]
+php_pear_packages: []

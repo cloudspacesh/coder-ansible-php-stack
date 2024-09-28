@@ -7,30 +7,30 @@
   with_items:
   - "digitalspacestdio/ngdev"
 
-- name: "Ensure mysql57"
+- name: "Ensure mysql84"
   homebrew:
-    name: "digitalspace-mysql57"
+    name: "digitalspace-mysql84"
     state: latest
   tags:
-    - mysql57
+    - mysql84
 
-- name: "Adding 'mysql57' to 'mysql_versions' array"
+- name: "Adding 'mysql84' to 'mysql_versions' array"
   set_fact:
-    mysql_versions: "{{ mysql_versions + [ 'mysql57' ] }}"
+    mysql_versions: "{{ mysql_versions + [ 'mysql84' ] }}"
   tags:
-    - mysql57
+    - mysql84
 
-- name: "Remove mysql57"
+- name: "Remove mysql84"
   homebrew:
-    name: "digitalspace-mysql57"
+    name: "digitalspace-mysql84"
     state: absent
   when: "mysql_versions is not defined or mysql_versions | length < 1"
   tags:
     - mysqlNone
 
-- name: "Remove mysql57 from supervisor"
+- name: "Remove mysql84 from supervisor"
   shell: 
-    cmd: "ls | grep 'mysql57' | xargs --no-run-if-empty -I{} rm {}"
+    cmd: "ls | grep 'mysql84' | xargs --no-run-if-empty -I{} rm {}"
     chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
   when: "mysql_versions is not defined or mysql_versions | length < 1"
   tags:
