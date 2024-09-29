@@ -116,9 +116,12 @@
         - php81
         - php82
         - php83
+        - php84
         - mailhog
         - postgresql15
+        - mysql57
         - mysql80
+        - mysql85
 
     - role: roles/nginx
       become: yes
@@ -134,6 +137,7 @@
         - php81
         - php82
         - php83
+        - php84
 
     - role: roles/php70
       become: yes
@@ -212,7 +216,17 @@
       tags:
         - phpNone
 
+    - role: roles/mysql57
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: developer_username is defined
+
     - role: roles/mysql80
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: developer_username is defined
+
+    - role: roles/mysql84
       become: yes
       become_user: "{{ developer_username }}"
       when: developer_username is defined
