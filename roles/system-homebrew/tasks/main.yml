@@ -84,6 +84,7 @@
     NONINTERACTIVE: 'TRUE'
   become: true
   become_user: "{{ developer_username }}"
+  ignore_errors: true
 
 - name: "Updating brew"
   command: "{{ homebrew_prefix }}/bin/brew update"
@@ -93,6 +94,7 @@
     HOMEBREW_NO_AUTO_UPDATE: 'TRUE'
   become: true
   become_user: "{{ developer_username }}"
+  ignore_errors: true
 
 - name: Reconfigure already installed formulas
   shell: |
