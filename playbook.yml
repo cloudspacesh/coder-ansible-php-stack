@@ -85,22 +85,22 @@
       become: yes
       when: "ansible_system == 'Linux'"
       tags:
-        - base-system
+        - always
 
     - role: roles/user-developer
       become: yes
       when: "ansible_system == 'Linux'"
       tags:
-        - base-system
+        - always
 
     - role: roles/zsh
       tags: 
-        - zsh
+        - always
 
     - role: roles/system-homebrew
       when: developer_username is defined and ansible_system == 'Linux'
       tags:
-        - base-system
+        - always
 
     - role: roles/supervisor
       become: yes
@@ -291,9 +291,10 @@
         - always
 
     - name: "Starting digitalspace-supervisor"
-      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/.linuxbrew/bin/digitalspace-supervisor-start || /bin/true || /usr/bin/true'
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && { {{ homebrew_prefix }}/bin/digitalspace-supervisor-start } || true'
       become: true
       become_user: "root"
+      ignore_errors: true
       tags:
         - always
 
@@ -303,12 +304,12 @@
       become_user: "root"
       when: "ansible_system == 'Linux'"
       tags:
-        - zsh
+        - always
 
     - name: "Changing default shell to zsh for {{ developer_username }}"
       shell: 'chsh -s $(which zsh) {{ developer_username }}'
       become: true
       become_user: "root"
       tags:
-        - zsh
+        - always
       when: developer_username is defined
