@@ -14,6 +14,7 @@
         warn: false
       tags: 
         - always
+        - core
 
         #- name: 'Installing facts.d'
         #copy:
@@ -28,6 +29,7 @@
       setup:
       tags: 
         - always
+        - core
 
     - name: Check Distro
       shell: "cat /etc/os-release | grep '^\\(ID=\\|ID_LIKE=\\)' | tail -1 | awk -F= '{ print $2 }'"
@@ -35,6 +37,7 @@
       when: ansible_system == 'Linux'
       tags:
         - always
+        - core
 
     - name: Register distro_id fact
       set_fact:
@@ -42,6 +45,7 @@
       when: ansible_system == 'Linux'
       tags:
         - always
+        - core
 
     - name: Ensure homebrew_prefix
       set_fact:
@@ -49,6 +53,7 @@
       when: "ansible_system == 'Linux'"
       tags:
         - always
+        - core
 
     - name: Ensure homebrew_prefix
       ansible.builtin.set_fact:
@@ -56,6 +61,7 @@
       when: "ansible_system == 'Darwin' and ansible_architecture == 'x86_64'"
       tags:
         - always
+        - core
 
     - name: Ensure homebrew_prefix
       ansible.builtin.set_fact:
@@ -63,11 +69,13 @@
       when: "ansible_system == 'Darwin' and ansible_architecture == 'arm64'"
       tags:
         - always
+        - core
 
     - debug:
         msg: "homebrew_prefix: {{ homebrew_prefix }}"
       tags:
         - always
+        - core
 
     - name: "Stopping digitalspace-supervisor"
       shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-stop || /bin/true || /usr/bin/true'
@@ -75,6 +83,7 @@
       become_user: "root"
       tags: 
         - always
+        - core
 
   roles:
     # - name: system-print-info
@@ -86,21 +95,25 @@
       when: "ansible_system == 'Linux'"
       tags:
         - always
+        - core
 
     - role: roles/user-developer
       become: yes
       when: "ansible_system == 'Linux'"
       tags:
         - always
+        - core
 
     - role: roles/zsh
       tags: 
         - always
+        - core
 
     - role: roles/system-homebrew
       when: developer_username is defined and ansible_system == 'Linux'
       tags:
         - always
+        - core
 
     - role: roles/supervisor
       become: yes
@@ -253,6 +266,7 @@
       become_user: "{{ developer_username }}"
       tags:
         - always
+        - core
     
     - name: "Remove another php versions"
       shell: "{{ homebrew_prefix }}/bin/brew uninstall --ignore-dependencies {{ brew_list.stdout }}"
@@ -261,6 +275,7 @@
       when: brew_list.stdout != ""
       tags:
         - always
+        - core
 
     - name: "Stat digitalspace-supervisor.d dir"
       stat:
@@ -269,6 +284,7 @@
       become: true
       tags:
         - always
+        - core
 
     - name: "Remove another php versions from supervisor"
       shell: 
@@ -279,6 +295,7 @@
       when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system == 'Linux'
       tags:
         - always
+        - core
 
     - name: "Remove another php versions from supervisor"
       shell:
@@ -289,6 +306,7 @@
       when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system != 'Linux'
       tags:
         - always
+        - core
 
     - name: "Starting digitalspace-supervisor"
       shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && { {{ homebrew_prefix }}/bin/digitalspace-supervisor-start } || true'
@@ -297,6 +315,7 @@
       ignore_errors: true
       tags:
         - always
+        - core
 
     - name: "Changing default shell to zsh "
       shell: 'chsh -s $(which zsh)'
@@ -305,6 +324,7 @@
       when: "ansible_system == 'Linux'"
       tags:
         - always
+        - core
 
     - name: "Changing default shell to zsh for {{ developer_username }}"
       shell: 'chsh -s $(which zsh) {{ developer_username }}'
@@ -312,4 +332,5 @@
       become_user: "root"
       tags:
         - always
+        - core
       when: developer_username is defined
