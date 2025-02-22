@@ -6,7 +6,7 @@ Copy the `.env.dist` to `.env` and update by proper values, or run directly on t
 
 ### Apply only core roles
 ```
-$ ./run.sh --ask-become-pass --tags php82,composer@2.6,mysql80,postgresql15,mailhog
+$ ./run.sh --ask-become-pass --tags core
 ```
 
 ### Apply extra roles
