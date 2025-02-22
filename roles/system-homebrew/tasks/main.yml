@@ -1,7 +1,7 @@
 ---
-- name: Ensure homebrew_prefix
-  set_fact:
-    homebrew_prefix: "/home/linuxbrew/.linuxbrew"
+#- name: Ensure homebrew_prefix
+#  set_fact:
+#    homebrew_prefix: "/home/linuxbrew/.linuxbrew"
 
 - name: Check if homebrew directory exists
   stat:
