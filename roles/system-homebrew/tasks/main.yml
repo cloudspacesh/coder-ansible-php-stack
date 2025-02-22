@@ -1,7 +1,13 @@
 ---
-#- name: Ensure homebrew_prefix
-#  set_fact:
-#    homebrew_prefix: "/home/linuxbrew/.linuxbrew"
+- name: Userhome Linux
+  ansible.builtin.set_fact:
+    developer_user_home: "/home/{{ developer_username }}"
+  when: "ansible_system == 'Linux'"
+
+- name: Userhome Darwin
+  ansible.builtin.set_fact:
+    developer_user_home: "/Users/{{ developer_username }}"
+  when: "ansible_system == 'Darwin'"
 
 - name: Check if homebrew directory exists
   stat:
@@ -11,7 +17,7 @@
 - name: create homebrew directory
   become: true
   file:
-    path: "/home/linuxbrew"
+    path: "{{ homebrew_prefix }}"
     state: directory
     owner: "{{ developer_username }}"
     mode: 0700
@@ -70,7 +76,7 @@
   become: true
   blockinfile:
     create: yes
-    dest: '{{ developer_user_info.home }}/{{item}}'
+    dest: '{{ developer_user_home }}/{{item}}'
     marker: "# {mark} brew"
     block: |
       export HOMEBREW_NO_AUTO_UPDATE=TRUE
@@ -125,7 +131,7 @@
 
 - name: "Updating profiles"
   blockinfile:
-    dest: '{{ developer_user_info.home }}/{{item}}'
+    dest: '{{ developer_user_home }}/{{item}}'
     marker: "# {mark} nvm"
     block: |
       export NVM_DIR="$HOME/.nvm"
@@ -149,7 +155,7 @@
     
 - name: "Adding SDKMAN to profiles"
   blockinfile:
-    dest: '{{ developer_user_info.home }}/{{item}}'
+    dest: '{{ developer_user_home }}/{{item}}'
     marker: "# {mark} sdkman"
     block: |
       source "$HOME/.sdkman/bin/sdkman-init.sh"
@@ -166,7 +172,7 @@
     
 - name: "Adding GOPATH to profiles"
   blockinfile:
-    dest: '{{ developer_user_info.home }}/{{item}}'
+    dest: '{{ developer_user_home }}/{{item}}'
     marker: "# {mark} golang"
     block: |
       export GOPATH="${HOME}/go"
@@ -186,7 +192,7 @@
     
 - name: "Adding jenv to profiles"
   blockinfile:
-    dest: '{{ developer_user_info.home }}/{{item}}'
+    dest: '{{ developer_user_home }}/{{item}}'
     marker: "# {mark} jenv"
     block: |
       export PATH="$HOME/.jenv/bin:$PATH"
