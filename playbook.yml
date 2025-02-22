@@ -309,7 +309,7 @@
         - core
 
     - name: "Starting digitalspace-supervisor"
-      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && { {{ homebrew_prefix }}/bin/digitalspace-supervisor-start } || true'
+      shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-start'
       become: true
       become_user: "root"
       ignore_errors: true
