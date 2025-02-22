@@ -110,7 +110,7 @@
         - core
 
     - role: roles/system-homebrew
-      when: developer_username is defined and ansible_system == 'Linux'
+      when: developer_username is defined
       tags:
         - always
         - core
