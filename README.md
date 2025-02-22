@@ -5,12 +5,12 @@
 Copy the `.env.dist` to `.env` and update by proper values, or run directly on the host without any `.env` file 
 
 ### Apply only core roles
-```
-$ ./run.sh --ask-become-pass --tags core
+```bash
+./run.sh --ask-become-pass --tags core
 ```
 
 ### Apply extra roles
-```
-$ ./run.sh --ask-become-pass --tags php84,composer@2,mysql84,postgresql15,mailhog
+```bash
+./run.sh --ask-become-pass --tags php84,composer@2,mysql84,postgresql15,mailhog
 ```
 
