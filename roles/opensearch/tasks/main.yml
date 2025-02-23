@@ -1,0 +1,37 @@
+---
+- name: Ensure that taps are tapped.
+  homebrew_tap: 
+    tap: "{{ item }}"
+    state: "present"
+    path: "/home/linuxbrew/.linuxbrew/bin"
+  with_items:
+    - "digitalspacestdio/ngdev"
+
+- name: "Ensure digitalspace-opensearch"
+  homebrew:
+    name: "digitalspace-opensearch"
+    state: latest
+  tags:
+    - opensearch
+
+- name: "Adding 'opensearch' to 'opensearch_versions' array"
+  set_fact:
+    opensearch_versions: "{{ (opensearch_versions | default([])) + [ 'opensearch' ] }}"
+  tags:
+    - opensearch
+
+- name: "Remove opensearch"
+  homebrew:
+    name: "digitalspace-opensearch"
+    state: absent
+  when: "opensearch_versions is not defined or opensearch_versions | length < 1"
+  tags:
+    - opensearchNone
+
+- name: "Remove opensearch from supervisor"
+  shell: 
+    cmd: "ls | grep 'opensearch' | xargs --no-run-if-empty -I{} rm {}"
+    chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
+  when: "opensearch_versions is not defined or opensearch_versions | length < 1"
+  tags:
+    - opensearchNone

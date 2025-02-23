@@ -1,0 +1,37 @@
+---
+- name: Ensure that taps are tapped.
+  homebrew_tap: 
+    tap: "{{ item }}"
+    state: "present"
+    path: "/home/linuxbrew/.linuxbrew/bin"
+  with_items:
+    - "digitalspacestdio/ngdev"
+
+- name: "Ensure digitalspace-redis"
+  homebrew:
+    name: "digitalspace-redis"
+    state: latest
+  tags:
+    - redis
+
+- name: "Adding 'redis' to 'redis_versions' array"
+  set_fact:
+    redis_versions: "{{ (redis_versions | default([])) + [ 'redis' ] }}"
+  tags:
+    - redis
+
+- name: "Remove redis"
+  homebrew:
+    name: "digitalspace-redis"
+    state: absent
+  when: "redis_versions is not defined or redis_versions | length < 1"
+  tags:
+    - redisNone
+
+- name: "Remove redis from supervisor"
+  shell: 
+    cmd: "ls | grep 'redis' | xargs --no-run-if-empty -I{} rm {}"
+    chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
+  when: "redis_versions is not defined or redis_versions | length < 1"
+  tags:
+    - redisNone
