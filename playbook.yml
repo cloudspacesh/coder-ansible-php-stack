@@ -132,6 +132,8 @@
         - php84
         - mailhog
         - postgresql15
+        - redis
+        - opensearch
         - mysql57
         - mysql80
         - mysql85
@@ -245,6 +247,16 @@
       when: developer_username is defined
     
     - role: roles/postgresql15
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: developer_username is defined
+
+    - role: roles/redis
+      become: yes
+      become_user: "{{ developer_username }}"
+      when: developer_username is defined
+
+    - role: roles/opensearch
       become: yes
       become_user: "{{ developer_username }}"
       when: developer_username is defined
