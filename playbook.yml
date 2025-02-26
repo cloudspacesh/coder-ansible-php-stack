@@ -320,6 +320,17 @@
         - always
         - core
 
+    - name: "Brew cleanup"
+      command: "{{ homebrew_prefix }}/bin/brew cleanup --prune=all"
+      environment:
+        NONINTERACTIVE: 'TRUE'
+      become: true
+      become_user: "{{ developer_username }}"
+      ignore_errors: true
+      tags:
+        - always
+        - core
+
     - name: "Starting digitalspace-supervisor"
       shell: '[ -e {{ homebrew_prefix }}/bin/digitalspace-supervisor-start ] && {{ homebrew_prefix }}/bin/digitalspace-supervisor-start'
       become: true
