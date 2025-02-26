@@ -276,6 +276,7 @@
       register: brew_list
       become: yes
       become_user: "{{ developer_username }}"
+      when: developer_username is defined
       tags:
         - always
         - core
@@ -284,7 +285,7 @@
       shell: "{{ homebrew_prefix }}/bin/brew uninstall --ignore-dependencies {{ brew_list.stdout }}"
       become: yes
       become_user: "{{ developer_username }}"
-      when: brew_list.stdout != ""
+      when: brew_list.stdout != "" and developer_username is defined
       tags:
         - always
         - core
@@ -304,7 +305,7 @@
         chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
       become: yes
       become_user: "{{ developer_username }}"
-      when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system == 'Linux'
+      when: stat_etc_digitalspace_supervisor_d.stat.exists and developer_username is defined and ansible_system == 'Linux'
       tags:
         - always
         - core
@@ -315,7 +316,7 @@
         chdir: "{{ homebrew_prefix }}/etc/digitalspace-supervisor.d"
       become: yes
       become_user: "{{ developer_username }}"
-      when: stat_etc_digitalspace_supervisor_d.stat.exists and ansible_system != 'Linux'
+      when: stat_etc_digitalspace_supervisor_d.stat.exists and developer_username is defined and ansible_system != 'Linux'
       tags:
         - always
         - core
@@ -326,6 +327,7 @@
         NONINTERACTIVE: 'TRUE'
       become: true
       become_user: "{{ developer_username }}"
+      when: developer_username is defined
       ignore_errors: true
       tags:
         - always
