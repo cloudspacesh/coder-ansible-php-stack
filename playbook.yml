@@ -265,6 +265,17 @@
       become: yes
       become_user: "{{ developer_username }}"
       when: developer_username is defined
+      tags:
+        - php70
+        - php71
+        - php72
+        - php73
+        - php74
+        - php80
+        - php81
+        - php82
+        - php83
+        - php84
     
     - role: roles/mailhog
       become: yes
