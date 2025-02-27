@@ -137,7 +137,7 @@
       export NVM_DIR="$HOME/.nvm"
       [ -s "{{ brew_nvm_prefix_output.stdout }}/nvm.sh" ] && . "{{ brew_nvm_prefix_output.stdout }}/nvm.sh"
       [ -s "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm" ] && . "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm"
-  with_items: ['.zprofile', '.profile']
+  with_items: ['.zprofile', '.profile', '.zshrc', '.bashrc']
   become: true
   become_user: "{{ developer_username }}"
 
