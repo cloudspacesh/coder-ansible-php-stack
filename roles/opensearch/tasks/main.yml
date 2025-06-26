@@ -6,6 +6,8 @@
     path: "/home/linuxbrew/.linuxbrew/bin"
   with_items:
     - "digitalspacestdio/ngdev"
+  tags:
+    - opensearch
 
 - name: "Ensure digitalspace-opensearch"
   homebrew:
