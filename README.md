@@ -1,9 +1,17 @@
-# Ansible Roles
+# Ansible Playbook for Coder Workspace
 
-### Configure
+## If you have sudo without password (like ubuntu vm)
+### Apply only core roles
+```bash
+./run.sh --tags core
+```
 
-Copy the `.env.dist` to `.env` and update by proper values, or run directly on the host without any `.env` file 
+### Apply extra roles
+```bash
+./run.sh --tags core,php84,composer@2,mysql80,mailhog
+```
 
+## Otherwise
 ### Apply only core roles
 ```bash
 ./run.sh --ask-become-pass --tags core
