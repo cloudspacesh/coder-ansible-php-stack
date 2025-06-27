@@ -32,6 +32,7 @@ debian_packages:
   - tmux
   - tmpreaper
   - net-tools
+  - socat
 
 fedora_packages:
   - make
@@ -65,4 +66,5 @@ fedora_packages:
   - tmux
   - tmpwatch
   - net-tools
+  - socat
 
