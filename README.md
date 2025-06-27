@@ -1,24 +1,21 @@
-# Ansible Playbook for Coder Workspace
+# Ansible Playbook for Coder Workspaces
 
-## If you have sudo without password (like ubuntu vm)
-### Apply only core roles
+## If you have passwordless sudo (e.g., Ubuntu VM):
+### Apply core roles only:
 ```bash
 ./run.sh --tags core
 ```
-
-### Apply extra roles
+### Apply core + extra roles:
 ```bash
 ./run.sh --tags core,php84,composer@2,mysql80,mailhog
 ```
 
-## Otherwise
-### Apply only core roles
+## If sudo password is required:
+### Apply core roles only:
 ```bash
 ./run.sh --ask-become-pass --tags core
 ```
-
-### Apply extra roles
+### Apply core + extra roles:
 ```bash
 ./run.sh --ask-become-pass --tags core,php84,composer@2,mysql80,mailhog
 ```
-
