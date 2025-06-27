@@ -26,10 +26,10 @@ else
   DISTRO=${ID_LIKE:-$ID}
   if [[ "debian" == $DISTRO ]]; then
     apt --fix-broken install
-    which envsubst > /dev/null || apt update -qy && apt install -qy gettext
-    which pip3 > /dev/null || apt update -qy && apt install -qy python3-pip
-    which python3 > /dev/null || apt update -qy && apt install -qy python3
-    which ansible-playbook > /dev/null || apt update -qy && apt install -qy ansible
+    which envsubst > /dev/null || sudo apt update -qy && sudo apt install -qy gettext
+    which pip3 > /dev/null || sudo apt update -qy && sudo apt install -qy python3-pip
+    which python3 > /dev/null || sudo apt update -qy && sudo apt install -qy python3
+    which ansible-playbook > /dev/null || sudo apt update -qy && sudo apt install -qy ansible
   elif [[ "fedora" == $DISTRO ]]; then
     which envsubst > /dev/null || dnf install -qy gettext
     which pip3 > /dev/null || dnf install -qy python3-pip
