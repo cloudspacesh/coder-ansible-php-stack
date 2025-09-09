@@ -9,6 +9,16 @@
   when: "ansible_system == 'Linux'"
   become: true
 
+- name: "Set developer user home path for Linux"
+  ansible.builtin.set_fact:
+    developer_user_home: "/home/{{ developer_username }}"
+  when: "ansible_system == 'Linux' and developer_username is defined"
+
+- name: "Set developer user home path for macOS"
+  ansible.builtin.set_fact:
+    developer_user_home: "/Users/{{ developer_username }}"
+  when: "ansible_system == 'Darwin' and developer_username is defined"
+
 - name: Check if .oh-my-zsh exists
   stat:
     path: "/root/.oh-my-zsh/"
@@ -71,20 +81,18 @@
   when: "ansible_system == 'Linux'"
   become: true
 
-- name: Userhome
-  ansible.builtin.set_fact:
-    developer_user_home: "/home/{{ developer_username }}"
-  when: "ansible_system == 'Linux'"
-
-- name: Userhome
-  ansible.builtin.set_fact:
-    developer_user_home: "/Users/{{ developer_username }}"
-  when: "ansible_system == 'Darwin'"
-
 - name: "Check if .oh-my-zsh exists"
   stat: 
     path: "{{ developer_user_home }}/.oh-my-zsh"
   register: stat_oh_my_zsh_result_basedir
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: "Check if {{ developer_username }} .zshrc exists"
+  stat:
+    path: "{{ developer_user_home }}/.zshrc"
+  register: stat_user_zshrc_result
   become: true
   become_user: "{{ developer_username }}"
   when: developer_username is defined
@@ -116,7 +124,7 @@
     src: "{{ developer_user_home }}/.oh-my-zsh/templates/zshrc.zsh-template"
     dest: "{{ developer_user_home }}/.zshrc"
     remote_src: yes
-  when: not stat_oh_my_zsh_result_basedir.stat.exists and developer_username is defined
+  when: developer_username is defined and not stat_user_zshrc_result.stat.exists
   become: true
   become_user: "{{ developer_username }}"
 
@@ -134,6 +142,47 @@
     state: present
     regexp: '^ZSH_THEME='
     line: 'ZSH_THEME="fino-time"'
+  become: true
+  become_user: "{{ developer_username }}"
+  when: developer_username is defined
+
+- name: "Add SSH agent configuration to root .zshrc"
+  blockinfile:
+    dest: /root/.zshrc
+    block: |
+      # SSH Agent configuration
+      [[ -f /tmp/ssh_agent_default.env ]] && {
+        eval "$(cat /tmp/ssh_agent_default.env)"
+      } || {
+        ssh-agent -s > /tmp/ssh_agent_default.env
+        eval "$(cat /tmp/ssh_agent_default.env)"
+        # Load all private keys
+        for key in ~/.ssh/id_*; do
+          [[ -f "$key" && ! "$key" =~ \.pub$ ]] && ssh-add "$key" 2>/dev/null
+        done
+      }
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - SSH Agent"
+    insertafter: EOF
+  when: "ansible_system == 'Linux'"
+  become: true
+
+- name: "Add SSH agent configuration to {{ developer_username }} .zshrc"
+  blockinfile:
+    dest: "{{ developer_user_home }}/.zshrc"
+    block: |
+      # SSH Agent configuration
+      [[ -f /tmp/ssh_agent_default.env ]] && {
+        eval "$(cat /tmp/ssh_agent_default.env)"
+      } || {
+        ssh-agent -s > /tmp/ssh_agent_default.env
+        eval "$(cat /tmp/ssh_agent_default.env)"
+        # Load all private keys
+        for key in ~/.ssh/id_*; do
+          [[ -f "$key" && ! "$key" =~ \.pub$ ]] && ssh-add "$key" 2>/dev/null
+        done
+      }
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - SSH Agent"
+    insertafter: EOF
   become: true
   become_user: "{{ developer_username }}"
   when: developer_username is defined

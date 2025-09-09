@@ -81,8 +81,8 @@
     block: |
       export HOMEBREW_NO_AUTO_UPDATE=TRUE
       export HOMEBREW_NO_INSTALL_CLEANUP=TRUE
-      eval "$({{ homebrew_prefix }}/bin/brew shellenv)"
-  with_items: ['.zprofile', '.profile']
+      which brew > /dev/null || eval "$({{ homebrew_prefix }}/bin/brew shellenv)"
+  with_items: ['.zprofile', '.bash_profile']
 
 - name: "Brew cleanup"
   command: "{{ homebrew_prefix }}/bin/brew cleanup --prune=all"
@@ -135,9 +135,9 @@
     marker: "# {mark} nvm"
     block: |
       export NVM_DIR="$HOME/.nvm"
-      [ -s "{{ brew_nvm_prefix_output.stdout }}/nvm.sh" ] && . "{{ brew_nvm_prefix_output.stdout }}/nvm.sh"
-      [ -s "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm" ] && . "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm"
-  with_items: ['.zprofile', '.profile', '.zshrc', '.bashrc']
+      which nvm > /dev/null || [ -s "{{ brew_nvm_prefix_output.stdout }}/nvm.sh" ] && . "{{ brew_nvm_prefix_output.stdout }}/nvm.sh"
+      which nvm > /dev/null || [ -s "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm" ] && . "{{ brew_nvm_prefix_output.stdout }}/etc/bash_completion.d/nvm"
+  with_items: ['.zprofile', '.bash_profile']
   become: true
   become_user: "{{ developer_username }}"
 
@@ -159,7 +159,7 @@
     marker: "# {mark} sdkman"
     block: |
       source "$HOME/.sdkman/bin/sdkman-init.sh"
-  with_items: ['.zprofile', '.profile']
+  with_items: ['.zprofile', '.bash_profile']
 
 - name: "Ensure go"
   command: "{{ homebrew_prefix }}/bin/brew install go"
@@ -177,7 +177,7 @@
     block: |
       export GOPATH="${HOME}/go"
       export PATH="${PATH}:${GOPATH}/bin"
-  with_items: ['.zprofile', '.profile']
+  with_items: ['.zprofile', '.bash_profile']
   become: true
   become_user: "{{ developer_username }}"
 
@@ -197,7 +197,7 @@
     block: |
       export PATH="$HOME/.jenv/bin:$PATH"
       if which jenv > /dev/null; then eval "$(jenv init -)"; fi
-  with_items: ['.zprofile', '.profile']
+  with_items: ['.zprofile', '.bash_profile']
   become: true
   become_user: "{{ developer_username }}"
 
